@@ -1,0 +1,4 @@
+ayy
+false	testcase/pcall.lua:3: md
+69
+true	420
