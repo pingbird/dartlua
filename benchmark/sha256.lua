@@ -100,7 +100,7 @@ end
 
 local i = 1
 
-print(sha256("potato"))
+assert(sha256("potato") == "e91c254ad58860a02c788dfb5c1a65d6a8846ab1dc649631c7db16fef4af2dec")
 
 function step()
     sha256("potato" .. i)
@@ -108,7 +108,7 @@ function step()
 end
 
 if debug then -- Running vanilla lua or LuaJIT
-    local count = 8192
+    local count = 16384
 
     if jit then -- warm up LuaJIT
         for i = 1, count do

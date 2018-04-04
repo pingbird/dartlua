@@ -51,12 +51,16 @@ Future<int> test(String path, int count) async {
 
   var res = new Thread(closure: cl).resume();
   if (!res.success) throw res.values[0];
-
+  
+  var step = env["step"] as Closure;
+  
+  if (step == null) throw "Benchmark diddn't create step function";
+  
   return runZoned(() {
     var t0 = new DateTime.now().microsecondsSinceEpoch;
     
     for (int i = 0; i < count; i++) {
-      new Thread(closure: env["step"]).resume();
+      new Thread(closure: step).resume();
     }
     
     return new DateTime.now().microsecondsSinceEpoch - t0;
