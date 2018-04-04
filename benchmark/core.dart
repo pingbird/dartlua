@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:lua/lua5.2.dart';
 import 'package:lua/src/5_2/context.dart';
 import 'package:lua/src/5_2/lualib/base.dart';
 import 'package:lua/src/5_2/table.dart';
@@ -51,7 +50,7 @@ Future<int> test(String path, int count) async {
   );
 
   var res = new Thread(closure: cl).resume();
-  if (!res.success) throw res.result[0];
+  if (!res.success) throw res.values[0];
 
   return runZoned(() {
     var t0 = new DateTime.now().microsecondsSinceEpoch;

@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'package:lua/src/flavor.dart';
 import 'package:lua/src/util.dart';
 import 'package:tuple/tuple.dart';
 

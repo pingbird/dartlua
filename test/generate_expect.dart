@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:async';
 
 main() async {
   await for (var f in new Directory("testcase").list().where((e) => e.path.endsWith(".lua"))) {

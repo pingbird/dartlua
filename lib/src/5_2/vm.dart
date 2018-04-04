@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:lua/src/5_2/context.dart';
 import 'package:lua/src/5_2/table.dart';
 import 'package:lua/src/func.dart';
+import 'package:lua/src/inst.dart';
 import 'package:lua/src/util.dart';
 import 'package:meta/meta.dart';
 import 'package:lua/src/5_2/state.dart';
@@ -15,23 +16,12 @@ class Closure {
     List<UStorage> upvalues,
   }) :
     context = context ?? parent.closure.context,
-    upvalues = upvalues ?? new List.filled(prototype.upvals.length, null),
-    instructions = new Int32List(prototype.code.length * 4) {
-    
-    for (int i = 0; i < prototype.code.length; i++) {
-      var inst = prototype.code[i];
-      instructions[i * 4] = inst.OP;
-      instructions[(i * 4) + 1] = inst.A;
-      instructions[(i * 4) + 2] = inst.B;
-      instructions[(i * 4) + 3] = inst.C;
-    }
-  }
+    upvalues = upvalues ?? new List.filled(prototype.upvals.length, null) {}
   
   final Frame parent;
   Context context;
   final Prototype prototype;
   Iterable<Frame> frames;
-  Int32List instructions;
 
   final List<UStorage> upvalues;
   
@@ -43,12 +33,12 @@ class Closure {
     var res = thread.resume(args);
     
     if (!res.success) {
-      throw res.result.isEmpty ? null : maybeAt(res.result, 0);
-    } else if (res.yielded) {
+      throw res.values.isEmpty ? null : maybeAt(res.values, 0);
+    } else if (thread.status == CoroutineStatus.SUSPENDED) {
       throw "attempt to yield across Dart call boundary";
     }
     
-    return res.result;
+    return res.values;
   }
 }
 
@@ -58,14 +48,6 @@ typedef dynamic UpvalueGetter();
 class UStorage {
   bool open = true;
   dynamic storage;
-}
-
-class DecodedInst {
-  DecodedInst(this.OP, [this.A = 0, this.B = 0, this.C = 0]);
-  final int OP;
-  final int A;
-  final int B;
-  final int C;
 }
 
 class Frame {
@@ -83,13 +65,6 @@ class Frame {
   List<dynamic> args;
 }
 
-class ThreadResult {
-  ThreadResult(this.success, this.yielded, this.result);
-  final bool success;
-  final bool yielded;
-  final List<dynamic> result;
-}
-
 class Thread {
   Thread({
     @required Closure closure,
@@ -104,8 +79,8 @@ class Thread {
   
   List<Frame> _frames = [];
 
-  int _getExtraArg() => _code[_frame.pc++ * 4 + 1];
-  int _getNextJump() => _code[_frame.pc * 4 + 2];
+  int _getExtraArg() => _code[_frame.pc++].A;
+  int _getNextJump() => _code[_frame.pc].B;
   
   dynamic _RK(int x) => x >= 256 ? _K[x - 256].value : _GR(x);
   dynamic _GR(int x) {
@@ -118,11 +93,11 @@ class Thread {
   }
 
   void loadReturns(List<dynamic> ret) {
-    var code = _closure.instructions;
     var pc = _frame.pc;
-    var A = code[pc * 4 - 3];
-    var B = code[pc * 4 - 2];
-    var C = code[pc * 4 - 1];
+    var inst = _code[pc - 1];
+    var A = inst.A;
+    var B = inst.B;
+    var C = inst.C;
   
     if (C == 2) {
       _SR(A, maybeAt(ret, 0));
@@ -198,7 +173,7 @@ class Thread {
     _frame = _frames.last;
     _closure = _frame.closure;
     _prototype = _closure.prototype;
-    _code = _closure.instructions;
+    _code = _prototype.code;
     _K = _prototype.constants;
     _G = _frames[0].closure.context;
     _bottom = _frame.bottom;
@@ -207,12 +182,12 @@ class Thread {
   Frame _frame;
   Closure _closure;
   Prototype _prototype;
-  Int32List _code;
+  List<Inst> _code;
   List<Const> _K;
   Context _G;
   int _bottom;
 
-  ThreadResult resume([List<dynamic> params = const []]) {
+  CoroutineResult resume([List<dynamic> params = const []]) {
     if (!started) {
       _updateFrame();
       for (int i = 0; i < max(params.length, _closure.prototype.params); i++) {
@@ -226,10 +201,11 @@ class Thread {
     try {
       while (true) {
         var pc = _frame.pc++;
-        var OP = _code[pc * 4];
-        var A = _code[pc * 4 + 1];
-        var B = _code[pc * 4 + 2];
-        var C = _code[pc * 4 + 3];
+        var inst = _code[pc];
+        var OP = inst.OP;
+        var A = inst.A;
+        var B = inst.B;
+        var C = inst.C;
         
         if (OP == 0) { // MOVE(AB)
           _SR(A, _GR(B));
@@ -358,7 +334,7 @@ class Thread {
 
             if (_frames.length == 1) {
               status = CoroutineStatus.DEAD;
-              return new ThreadResult(true, false, ret);
+              return new CoroutineResult(true, ret);
             } else {
               _frame.dead = true;
               _frames.removeLast();
@@ -373,7 +349,7 @@ class Thread {
           
           if (_frames.length == 1) {
             status = CoroutineStatus.DEAD;
-            return new ThreadResult(true, false, ret);
+            return new CoroutineResult(true, ret);
           } else {
             _frame.dead = true;
             _frames.removeLast();
@@ -405,7 +381,7 @@ class Thread {
           var i = 0;
           for (int n = A + 3; n < A + C + 3; n++) _SR(n, maybeAt(ret, i++));
           
-          var b = _code[_frame.pc * 4 + 2];
+          var b = _code[_frame.pc].B;
           var a = _getExtraArg();
           
           if (_GR(a + 1) != null) {

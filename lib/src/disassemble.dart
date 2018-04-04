@@ -1,7 +1,5 @@
 import 'func.dart';
-import 'package:lua/src/flavor.dart';
 import 'package:lua/src/util.dart';
-import 'package:lua/src/inst.dart';
 
 String disassemble(CodeDump code) {
   String o = "";

@@ -1,5 +1,4 @@
 import 'package:lua/src/inst.dart';
-import 'package:lua/src/util.dart';
 
 class Flavor {
   Flavor({this.name, this.version_major, this.version_minor, this.instructions}) {

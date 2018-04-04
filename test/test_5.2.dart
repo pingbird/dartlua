@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 import 'generate_expect.dart' as foo;
 
 main() async {
-  await foo.main();
+  await foo.main(); // Temporary
   
   Map<FileSystemEntity, String> tests = {};
   

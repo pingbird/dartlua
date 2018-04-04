@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:lua/src/5_2/table.dart';
 import 'package:lua/src/5_2/vm.dart';
 import 'package:lua/src/5_2/state.dart';
@@ -26,6 +24,6 @@ loadCoroutine(Context ctx) {
     if (!res.success) return [];
     
     var o = [];
-    o.addAll(res.result);
+    o.addAll(res.values);
   };
 }
