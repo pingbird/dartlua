@@ -1,25 +1,3 @@
--- Closing properly
-
-local y
-local x = (function()
-    do
-        local a = 691
-        local b = 692
-        local c = 693
-        y = function()
-            print(a, b, c)
-        end
-    end
-
-    local a, b, c = 421, 422, 423
-    print(a, b, c)
-end)()
-
-local a, b, c = 421, 422, 423
-
-y()
-print(a, b, c)
-
 -- Basic access
 
 local x = 1
@@ -100,3 +78,25 @@ print(a)
 end)(a)
 
 print(a)
+
+-- Closing properly
+
+local y
+local x = (function()
+    do
+        local a = 691
+        local b = 692
+        local c = 693
+        y = function()
+            print(a, b, c)
+        end
+    end
+
+    local a, b, c = 421, 422, 423
+    print(a, b, c)
+end)()
+
+local a, b, c = 421, 422, 423
+
+y()
+print(a, b, c)

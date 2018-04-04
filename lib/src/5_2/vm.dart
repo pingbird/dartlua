@@ -157,6 +157,7 @@ class Thread {
         _frame.openUpvalues[i]
           ..storage = _GR(i)
           ..open = false;
+        _frame.openUpvalues[i] = null;
       }
     }
   }
