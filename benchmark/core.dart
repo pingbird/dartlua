@@ -53,18 +53,29 @@ Future<int> test(String path, int count) async {
   if (!res.success) throw res.values[0];
   
   var step = env["step"] as Closure;
-  
   if (step == null) throw "Benchmark diddn't create step function";
+
+  for (int i = 0; i < count; i++) { // Warm up
+    new Thread(closure: step).resume();
+  }
   
-  return runZoned(() {
+  int dt;
+  
+  runZoned(() {
     var t0 = new DateTime.now().microsecondsSinceEpoch;
     
     for (int i = 0; i < count; i++) {
       new Thread(closure: step).resume();
     }
     
-    return new DateTime.now().microsecondsSinceEpoch - t0;
+    dt = new DateTime.now().microsecondsSinceEpoch - t0;
   }, zoneSpecification: new ZoneSpecification(
     print: (Zone self, ZoneDelegate parent, Zone zone, String line) {},
   ));
+  
+  if (env["finish"] as Closure != null) {
+    new Thread(closure: env["finish"]).resume();
+  }
+  
+  return dt;
 }

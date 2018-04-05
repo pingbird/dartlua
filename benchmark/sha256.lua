@@ -102,28 +102,32 @@ local i = 1
 
 assert(sha256("potato") == "e91c254ad58860a02c788dfb5c1a65d6a8846ab1dc649631c7db16fef4af2dec")
 
+local hash = "potato"
+
 function step()
-    sha256("potato" .. i)
-    i = i + 1
+    hash = sha256(hash)
+end
+
+function finish()
+    -- print(hash)
 end
 
 if debug then -- Running vanilla lua or LuaJIT
     local count = 16384
 
-    if jit then -- warm up LuaJIT
-        for i = 1, count do
-            sha256("potato" .. i)
-        end
+    for i = 1, count do
+        step()
     end
 
     local socket = require("socket")
     local t0 = socket.gettime()
 
     for i = 1, count do
-        sha256("potato" .. i)
+        step()
     end
 
     local dt = socket.gettime() - t0
-    print(math.floor(dt * 1000) .. "ms")
-    print(math.floor(count / dt) .. "H/s")
+    print(math.floor(dt * 1000000))
+
+    -- print(hash)
 end
