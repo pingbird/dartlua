@@ -142,7 +142,7 @@ class Context {
       if (x == double.NEGATIVE_INFINITY) return "-inf";
       return x.toString().replaceFirst(new RegExp(r"\.0$"), "");
     } else if (hasMetamethod(x, "__tostring")) {
-      return invokeMetamethod(x, "__tostring", [x]);
+      return maybeAt(invokeMetamethod(x, "__tostring", [x]), 0);
     } else if (x is String) {
       return x;
     } else if (x is int || x is bool) {

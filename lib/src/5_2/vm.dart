@@ -102,14 +102,8 @@ class Thread {
   int _getNextJump() => _code[_frame.pc].B;
   
   dynamic _RK(int x) => x >= 256 ? _K[x - 256].value : _GR(x);
-  dynamic _GR(int x) {
-    return registers[x + _base];
-  }
-  dynamic _SR(int x, dynamic y) {
-    x += _base;
-    if (x < _base) throw "Register out of bounds $x (${_base}, ${_frame._top})";
-    return registers[x] = y;
-  }
+  dynamic _GR(int x) => registers[x + _base];
+  dynamic _SR(int x, dynamic y) => registers[x + _base] = y;
 
   void loadReturns(List<dynamic> ret) {
     var pc = _frame.pc;
