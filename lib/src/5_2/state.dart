@@ -108,7 +108,7 @@ class LuaState {
     return new _LuaFunctionImpl(new Closure(
       dump.main,
       context: _context,
-      upvalues: [new UStorage()..open = false..storage = _context.env],
+      upvalues: [new Upval.store(_context.env)],
     ));
   }
   

@@ -85,7 +85,7 @@ class Decoder {
     prim.prototypes = new List.generate(readInt(code.intSize, code.bigEndian), (i) => readFunc(prim, root));
     doing = "reading upvals";
     prim.upvals = new List.generate(readInt(code.intSize, code.bigEndian), (i) {
-      return new Upvalue(read(1)[0] == 1, read(1)[0]);
+      return new UpvalDef(read(1)[0] == 1, read(1)[0]);
     });
     doing = "reading source code";
     prim.source = readString();

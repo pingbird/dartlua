@@ -1,5 +1,5 @@
+import 'dart:collection';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:lua/src/5_2/context.dart';
 import 'package:lua/src/5_2/table.dart';
@@ -9,11 +9,39 @@ import 'package:lua/src/util.dart';
 import 'package:meta/meta.dart';
 import 'package:lua/src/5_2/state.dart';
 
+class Upval extends LinkedListEntry<Upval> {
+  Upval(this.reg, this.base, this.registers) : open = true;
+  Upval.store(this.storage) : open = false;
+  
+  bool open;
+  int reg;
+  int base;
+  List<dynamic> registers;
+  dynamic storage;
+  
+  void close() {
+    open = false;
+    storage = registers[reg + base];
+    registers = null;
+    unlink();
+  }
+  
+  void set(dynamic v) {
+    if (open) {
+      registers[reg + base] = v;
+    } else {
+      storage = v;
+    }
+  }
+  
+  dynamic get() => open ? registers[reg] : storage;
+}
+
 class Closure {
   Closure(this.prototype, {
     this.parent,
     Context context,
-    List<UStorage> upvalues,
+    List<Upval> upvalues,
   }) :
     context = context ?? parent.closure.context,
     upvalues = upvalues ?? new List.filled(prototype.upvals.length, null) {}
@@ -23,7 +51,7 @@ class Closure {
   final Prototype prototype;
   Iterable<Frame> frames;
 
-  final List<UStorage> upvalues;
+  final List<Upval> upvalues;
   
   List<dynamic> call(List<dynamic> args) {
     var thread = new Thread(
@@ -42,22 +70,13 @@ class Closure {
   }
 }
 
-typedef void UpvalueSetter(dynamic x);
-typedef dynamic UpvalueGetter();
-
-class UStorage {
-  bool open = true;
-  dynamic storage;
-}
-
 class Frame {
-  Frame(this.closure, {@required this.bottom}) :
-    openUpvalues = new List.filled(closure.prototype.registers, null),
+  Frame(this.closure, {@required this.base}) :
     _top = closure.prototype.registers {}
     
-  int bottom;
+  int base;
   final Closure closure;
-  final List<UStorage> openUpvalues;
+  final openUVs = new LinkedList<Upval>();
   
   bool dead = false;
   int _top;
@@ -69,7 +88,7 @@ class Thread {
   Thread({
     @required Closure closure,
   }) : registers = new List.filled(closure.prototype.registers, null, growable: true) {
-    _frames.add(new Frame(closure, bottom: 0));
+    _frames.add(new Frame(closure, base: 0));
   }
 
   List<dynamic> registers;
@@ -84,11 +103,11 @@ class Thread {
   
   dynamic _RK(int x) => x >= 256 ? _K[x - 256].value : _GR(x);
   dynamic _GR(int x) {
-    return registers[x + _bottom];
+    return registers[x + _base];
   }
   dynamic _SR(int x, dynamic y) {
-    x += _bottom;
-    if (x < _bottom) throw "Register out of bounds $x (${_bottom}, ${_frame._top})";
+    x += _base;
+    if (x < _base) throw "Register out of bounds $x (${_base}, ${_frame._top})";
     return registers[x] = y;
   }
 
@@ -121,50 +140,46 @@ class Thread {
     }
   }
   
-  dynamic _getUpval(Frame f, int idx) {
-    var uv = f.closure.upvalues[idx];
-    var pr = f.closure.prototype.upvals[idx];
-    if (uv.open) {
-      if (pr.stack) {
-        if (f.closure.parent.dead) throw "dead parent ${new LuaErrorImpl("", f.closure.parent.closure.prototype, 0)}";
-        return registers[f.closure.parent.bottom + pr.reg];
-      } else {
-        return _getUpval(f.closure.parent, pr.reg);
-      }
-    } else return uv.storage;
-  }
-  
-  dynamic getUpval(Frame f, int idx) {
-    var o = _getUpval(f, idx);
-    return o;
-  }
-
-  void setUpval(Frame f, int idx, dynamic value) {
-    var uv = f.closure.upvalues[idx];
-    var pr = f.closure.prototype.upvals[idx];
-    if (!uv.open) {
-      uv.storage = value;
-    } else if (pr.stack) {
-      registers[f.closure.parent.bottom + pr.reg] = value;
-    } else {
-      setUpval(f.closure.parent, pr.reg, value);
-    }
-  }
+  dynamic getUpval(int idx) => _closure.upvalues[idx].get();
+  dynamic setUpval(int idx, dynamic value) => _closure.upvalues[idx].set(value);
   
   void closeUpvals(int from) {
-    for (int i = from; i < _prototype.registers; i++) {
-      if (_frame.openUpvalues[i] != null) {
-        _frame.openUpvalues[i]
-          ..storage = _GR(i)
-          ..open = false;
-        _frame.openUpvalues[i] = null;
-      }
+    if (_frame.openUVs.isEmpty) return;
+    
+    var e = _frame.openUVs.first;
+    while (e != null && e.reg >= from) {
+      var next = e.next;
+      e.close();
+      e = next;
     }
+  }
+
+  Upval openUpval(int reg) {
+    if (_frame.openUVs.isEmpty) {
+      var uv = new Upval(reg, _base, registers);
+      _frame.openUVs.addFirst(uv);
+      return uv;
+    }
+    
+    var e = _frame.openUVs.first;
+    while (e.reg >= reg) {
+      if (e.reg == reg) return e;
+      if (e.next == null) {
+        var uv = new Upval(reg, _base, registers);
+        e.insertAfter(uv);
+        return uv;
+      }
+      e = e.next;
+    }
+    
+    var uv = new Upval(reg, _base, registers);
+    e.insertBefore(uv);
+    return uv;
   }
   
   void setTop(int x) {
-    if (x >= registers.length - _bottom) {
-      registers.length = _bottom + x + 1;
+    if (x >= registers.length - _base) {
+      registers.length = _base + x + 1;
     }
     
     _frame._top = x;
@@ -177,7 +192,7 @@ class Thread {
     _code = _prototype.code;
     _K = _prototype.constants;
     _G = _frames[0].closure.context;
-    _bottom = _frame.bottom;
+    _base = _frame.base;
   }
   
   Frame _frame;
@@ -186,7 +201,7 @@ class Thread {
   List<Inst> _code;
   List<Const> _K;
   Context _G;
-  int _bottom;
+  int _base;
 
   CoroutineResult resume([List<dynamic> params = const []]) {
     if (!started) {
@@ -219,22 +234,22 @@ class Thread {
           if (C != 0) _frame.pc++;
         } else if (OP == 4) { // LOADNIL(AB)
           var a = A;
-          registers.fillRange(a + _bottom, a + B + 1 + _bottom);
+          registers.fillRange(a + _base, a + B + 1 + _base);
         } else if (OP == 5) { // GETUPVAL(AB)
-          _SR(A, getUpval(_frame, B));
+          _SR(A, getUpval(B));
         } else if (OP == 6) { // GETTABUP(ABC)
-          var v = _G.tableIndex(getUpval(_frame, B), _RK(C));
+          var v = _G.tableIndex(getUpval(B), _RK(C));
           _SR(A, v);
         } else if (OP == 7) { // GETTABLE(ABC)
           _SR(A, _G.tableIndex(_RK(B), _RK(C)));
         } else if (OP == 8) { // SETTABUP(ABC)
-          Context.tableSet(getUpval(_frame, A), _RK(B), _RK(C));
+          Context.tableSet(getUpval(A), _RK(B), _RK(C));
         } else if (OP == 9) { // SETUPVAL(A)
-          setUpval(_frame, B, _GR(A));
+          setUpval(B, _GR(A));
         } else if (OP == 10) { // SETTABLE(ABC)
           Context.tableSet(_GR(A), _RK(B), _RK(C));
         } else if (OP == 11) { // NEWTABLE(ABC)
-          _SR(A, new Table()); // TODO: pre-allocate
+          _SR(A, new Table());
         } else if (OP == 12) { // SELF(ABC)
           _SR(A + 1, _GR(B));
           _SR(A, _G.tableIndex(_GR(B), _RK(C)));
@@ -303,7 +318,7 @@ class Thread {
           if (B != 1) for (int i = 0; i < args.length; i++) args[i] = _GR(i + A + 1);
           
           if (x is Closure) {
-            _frames.add(new Frame(x, bottom: _frame.bottom + _frame._top));
+            _frames.add(new Frame(x, base: _frame.base + _frame._top));
             _updateFrame();
             setTop(_prototype.registers);
             if (_prototype.varag > 0) _frame.args = args;
@@ -323,7 +338,7 @@ class Thread {
           if (x is Closure) {
             _frame.dead = true;
             _frames.removeLast();
-            _frames.add(new Frame(x, bottom: _frame.bottom + _frame._top));
+            _frames.add(new Frame(x, base: _frame.base + _frame._top));
             _updateFrame();
             setTop(_prototype.registers);
             if (_prototype.varag > 0) _frame.args = args;
@@ -403,19 +418,13 @@ class Thread {
         } else if (OP == 37) { // CLOSURE(ABC)
           var proto = _prototype.prototypes[B];
           
-          for (int i = 0; i < proto.upvals.length; i++) {
-            var uv = proto.upvals[i];
-            if (uv.stack) {
-              _frame.openUpvalues[uv.reg] ??= new UStorage();
-            }
-          }
-          
           _SR(A, new Closure(
             proto,
             parent: _frame,
-            upvalues: new List.generate(proto.upvals.length, (i) =>
-              (proto.upvals[i].stack ? _frame.openUpvalues[proto.upvals[i].reg] : null) ?? new UStorage()
-            ),
+            upvalues: new List.generate(proto.upvals.length, (i) {
+              var def = proto.upvals[i];
+              return def.stack ? openUpval(def.reg) : _closure.upvalues[def.reg];
+            }),
           ));
         } else if (OP == 38) { // VARARG
           if (B > 0) {

@@ -47,7 +47,7 @@ Future<int> test(String path, int count) async {
   var cl = new Closure(
     code.main,
     context: context,
-    upvalues: [new UStorage()..open = false..storage = context.env],
+    upvalues: [new Upval.store(context.env)],
   );
 
   var res = new Thread(closure: cl).resume();

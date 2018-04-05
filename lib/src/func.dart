@@ -54,8 +54,8 @@ class StringConst extends Const {
   toString() => "\"${luaEscape(value)}\"";
 }
 
-class Upvalue {
-  Upvalue(this.stack, this.reg);
+class UpvalDef {
+  UpvalDef(this.stack, this.reg);
   String name;
   bool stack;
   int reg;
@@ -82,7 +82,7 @@ class Prototype {
   List<Const> constants;
   Iterable<Const> constantScope;
   List<Prototype> prototypes;
-  List<Upvalue> upvals;
+  List<UpvalDef> upvals;
   String source;
   List<int> lines;
   List<Local> locals;
