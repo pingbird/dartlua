@@ -2,6 +2,8 @@ import 'package:lua/src/flavor.dart';
 import 'package:lua/src/inst.dart';
 import 'package:lua/src/util.dart';
 
+import 'dart:typed_data';
+
 class CodeDump {
   String name;
   int versionMajor;
@@ -79,6 +81,7 @@ class Prototype {
   int varag;
   int registers;
   InstBlock code;
+  Int32List rawCode;
   List<Const> constants;
   Iterable<Const> constantScope;
   List<Prototype> prototypes;

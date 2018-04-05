@@ -1,6 +1,7 @@
 import 'dart:collection';
 import 'dart:math';
 
+import 'dart:typed_data';
 import 'package:lua/src/5_2/context.dart';
 import 'package:lua/src/5_2/table.dart';
 import 'package:lua/src/func.dart';
@@ -98,19 +99,18 @@ class Thread {
   
   List<Frame> _frames = [];
 
-  int _getExtraArg() => _code[_frame.pc++].A;
-  int _getNextJump() => _code[_frame.pc].B;
+  int _getExtraArg() => _code[_frame.pc++ * 4 + 1];
+  int _getNextJump() => _code[_frame.pc * 4 + 2];
   
   dynamic _RK(int x) => x >= 256 ? _K[x - 256].value : _GR(x);
   dynamic _GR(int x) => registers[x + _base];
   dynamic _SR(int x, dynamic y) => registers[x + _base] = y;
 
   void loadReturns(List<dynamic> ret) {
-    var pc = _frame.pc;
-    var inst = _code[pc - 1];
-    var A = inst.A;
-    var B = inst.B;
-    var C = inst.C;
+    var pc = _frame.pc - 1;
+    var A = _code[pc * 4 + 1];
+    var B = _code[pc * 4 + 2];
+    var C = _code[pc * 4 + 3];
   
     if (C == 2) {
       _SR(A, maybeAt(ret, 0));
@@ -183,7 +183,7 @@ class Thread {
     _frame = _frames.last;
     _closure = _frame.closure;
     _prototype = _closure.prototype;
-    _code = _prototype.code;
+    _code = _prototype.rawCode;
     _K = _prototype.constants;
     _G = _frames[0].closure.context;
     _base = _frame.base;
@@ -192,7 +192,7 @@ class Thread {
   Frame _frame;
   Closure _closure;
   Prototype _prototype;
-  List<Inst> _code;
+  Int32List _code;
   List<Const> _K;
   Context _G;
   int _base;
@@ -211,11 +211,10 @@ class Thread {
     try {
       while (true) {
         var pc = _frame.pc++;
-        var inst = _code[pc];
-        var OP = inst.OP;
-        var A = inst.A;
-        var B = inst.B;
-        var C = inst.C;
+        var OP = _code[pc * 4];
+        var A = _code[pc * 4 + 1];
+        var B = _code[pc * 4 + 2];
+        var C = _code[pc * 4 + 3];
         
         if (OP == 0) { // MOVE(AB)
           _SR(A, _GR(B));
@@ -391,7 +390,7 @@ class Thread {
           var i = 0;
           for (int n = A + 3; n < A + C + 3; n++) _SR(n, maybeAt(ret, i++));
           
-          var b = _code[_frame.pc].B;
+          var b = _code[_frame.pc * 4 + 2];
           var a = _getExtraArg();
           
           if (_GR(a + 1) != null) {

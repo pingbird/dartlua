@@ -218,8 +218,7 @@ class Inst {
 }
 
 class InstBlock extends ListBase<Inst> {
-  InstBlock(this._list, {this.island = false});
-  bool island;
+  InstBlock(this._list);
   
   after(Inst x) => new InstBlock(skipWhile((e) => e != x).toList());
   before(Inst x) => new InstBlock(takeWhile((e) => e != x).toList());

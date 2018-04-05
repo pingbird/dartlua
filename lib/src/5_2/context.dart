@@ -13,7 +13,7 @@ class LuaErrorImpl extends LuaError {
   String get source => proto.root.name;
   StackTrace dartStackTrace;
   
-  toStringShort() => "${proto.root.name}:${proto.lines[inst]}: $value";
+  toStringShort() => "${proto.root.name}:${maybeAt(proto.lines, inst)}: $value";
   toString() => "${toStringShort()}${dartStackTrace == null ? "" : "\n$dartStackTrace"}";
 }
 
@@ -118,16 +118,13 @@ class Context {
   
   dynamic tableIndex(dynamic x, dynamic y) {
     if (x is Table) {
-      if (!x.map.containsKey(y) && x.metatable != null && x.metatable.map.containsKey("__index")) {
-        var ni = x.metatable.map["__index"];
-        if (ni is Closure) {
-          return ni([this, y]);
-        } else {
-          return tableIndex(ni, y);
-        }
-      } else {
-        return x.rawget(y);
-      }
+      var o = x.rawget(y);
+      if (o != null) return o;
+      if (x.metatable == null) return null;
+      var ni = x.metatable.map["__index"];
+      if (ni == null) return null;
+      if (ni is Closure) return ni([this, y]);
+      return tableIndex(ni, y);
     } else if (x is String) {
       return stringMetatable.rawget(y);
     } else { // TODO: strings

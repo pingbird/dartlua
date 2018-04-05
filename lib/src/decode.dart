@@ -70,6 +70,7 @@ class Decoder {
     doing = "reading instructions";
     int instCount = readInt(code.intSize, code.bigEndian);
     prim.code = new InstBlock(new List.generate(instCount, (i) => readInst()));
+    prim.rawCode = new Int32List.fromList(prim.code.expand((e) => [e.OP, e.A, e.B, e.C]).toList());
     doing = "reading constants";
     prim.constants = new List.generate(readInt(code.intSize, code.bigEndian), (i) {
       switch (read(1)[0]) {
