@@ -11,8 +11,8 @@ loadString(Context ctx) {
   ctx.stringMetatable = string;
 
   string["rep"] = (List<dynamic> args) {
-    String str = Context.luaToString(Context.getNumArg(args, 0, "rep"));
-    num amount = Context.getNumArg(args, 1, "rep");
+    String str = Context.luaToString(Context.getArg1<String>(args, 0, "rep"));
+    num amount = Context.getArg1<num>(args, 1, "rep");
     return [str * amount.floor()];
   };
 
@@ -20,7 +20,7 @@ loadString(Context ctx) {
     var o = new StringBuffer();
   
     for (int i = 0; i < args.length; i++) {
-      int n = Context.getNumArg(args, i, "char").floor();
+      int n = Context.getArg1<num>(args, i, "char").floor();
       if (n < 0 || n > 255) throw "bad argument #${i + 1} to 'char' (value out of range)";
       o.writeCharCode(n);
     }
@@ -40,8 +40,8 @@ loadString(Context ctx) {
       throw "bad argument #1 to 'sub' (string expected, got ${Context.getTypename(i)})";
     }
     
-    int start = Context.getNumArg(args, 1, "sub").floor();
-    int end = maybeAt(args, 2) == null ? str.length : Context.getNumArg(args, 2, "sub").floor();
+    int start = Context.getArg1<num>(args, 1, "sub").floor();
+    int end = maybeAt(args, 2) == null ? str.length : Context.getArg1<num>(args, 2, "sub").floor();
     
     if (start == 0) start = 1;
     if (start < 0) start = str.length + start + 1;
@@ -63,8 +63,8 @@ loadString(Context ctx) {
       throw "bad argument #1 to 'byte' (string expected, got ${Context.getTypename(i)})";
     }
 
-    int start = Context.getNumArg(args, 1, "byte").floor();
-    int end = maybeAt(args, 2) == null ? start : Context.getNumArg(args, 2, "byte");
+    int start = Context.getArg1<num>(args, 1, "byte").floor();
+    int end = maybeAt(args, 2) == null ? start : Context.getArg1<num>(args, 2, "byte");
   
     if (start == 0) start = 1;
     if (start < 0) start = str.length + start + 1;

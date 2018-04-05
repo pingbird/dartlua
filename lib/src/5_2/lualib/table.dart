@@ -8,10 +8,10 @@ loadTable(Context ctx) {
   ctx.env["table"] = table;
 
   table["concat"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "concat", [const TypeMatcher<Table>()]);
+    Table t = Context.getArg1<Table>(args, 0, "concat");
     var delim = Context.luaToString(maybeAt(args, 1) ?? "");
-    num s = maybeAt(args, 2) == null ? 1 : Context.getArg(args, 2, "concat", [const TypeMatcher<num>()]);
-    num e = maybeAt(args, 3) == null ? t.length : Context.getArg(args, 3, "concat", [const TypeMatcher<num>()]);
+    num s = maybeAt(args, 2) == null ? 1 : Context.getArg1<num>(args, 2, "concat");
+    num e = maybeAt(args, 3) == null ? t.length : Context.getArg1<num>(args, 3, "concat");
     
     var o = new StringBuffer();
     for (int i = s.floor(); i <= e.floor(); i++) {
@@ -27,11 +27,11 @@ loadTable(Context ctx) {
   table["insert"] = (List<dynamic> args) {
     if (args.length < 2 || args.length > 3) throw "wrong number of arguments to 'insert";
     
-    Table t = Context.getArg(args, 0, "insert", [const TypeMatcher<Table>()]);
+    Table t = Context.getArg1<Table>(args, 0, "insert");
     var len = t.length;
     
     var v = args[args.length < 3 ? 1 : 2];
-    int pos = args.length < 3 ? len + 1 : (Context.getArg(args, 1, "insert", [const TypeMatcher<num>()]) as num).floor();
+    int pos = args.length < 3 ? len + 1 : Context.getArg1<num>(args, 1, "insert").floor();
     if (pos > len || pos < 0) throw "bad argument #2 to 'insert' (position out of bounds)";
     
     for (int i = len + 1; i > pos; i--) t.rawset(i, t.rawget(i - 1));
@@ -41,13 +41,13 @@ loadTable(Context ctx) {
   };
 
   table["maxn"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "maxn", [const TypeMatcher<Table>()]);
+    Table t = Context.getArg1<Table>(args, 0, "maxn");
     return [t.map.keys.fold(t.length, (s, e) => e is num && e > s ? e : s)];
   };
 
   table["remove"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "remove", [const TypeMatcher<Table>()]);
-    int pos = maybeAt(args, 1) == null ? t.length : (Context.getArg(args, 1, "remove", [const TypeMatcher<num>()]) as num).floor();
+    Table t = Context.getArg1<Table>(args, 0, "remove");
+    int pos = maybeAt(args, 1) == null ? t.length : Context.getArg1<num>(args, 1, "remove").floor();
     
     var len = t.length;
     
@@ -63,8 +63,8 @@ loadTable(Context ctx) {
   };
 
   table["sort"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "maxn", [const TypeMatcher<Table>()]);
-    LuaDartFunc f = maybeAt(args, 1) == null ? null : Context.getArg(args, 1, "sort", [const TypeMatcher<LuaDartFunc>()]);
+    Table t = Context.getArg1<Table>(args, 0, "maxn");
+    LuaDartFunc f = maybeAt(args, 1) == null ? null : Context.getArg1<LuaDartFunc>(args, 1, "sort");
     
     t.arr.sort((a, b) {
       if (f != null) {

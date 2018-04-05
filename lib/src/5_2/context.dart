@@ -59,25 +59,30 @@ class Context {
     return "${v.runtimeType}";
   }
   
-  static dynamic getArg(List<dynamic> args, int idx, String name, List<TypeMatcher> matchers) {
-    if (args.length <= idx) throw
-    "bad argument #${idx + 1} to '$name' (${matchers[0]} expected, got no value)";
-    if (matchers.any((m) => m.matches(args[idx]))) return args[idx];
-    throw "bad argument #${idx + 1} to '$name' (${matchers[0]} expected, got ${getTypename(args[idx])})";
-  }
-
-  static num getNumArg(List<dynamic> args, int idx, String name) {
-    if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (number expected, got no value)";
-    var x = args[idx];
-    if (x is num) return x;
-    throw "bad argument #${idx + 1} to '$name' (number expected, got ${getTypename(x)})";
+  static dynamic getAny(List<dynamic> args, int idx, String name) {
+    if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (value expected, got no value)";
+    return args[idx];
   }
 
   static T getArg1<T>(List<dynamic> args, int idx, String name) {
     if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got no value)";
     var x = args[idx];
     if (new TypeMatcher<T>().matches(x)) return x;
-    throw "bad argument #${idx + 1} to '$name' (number expected, got ${getTypename(x)})";
+    throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got ${getTypename(x)})";
+  }
+
+  static dynamic getArg2<T, T2>(List<dynamic> args, int idx, String name) {
+    if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got no value)";
+    var x = args[idx];
+    if (const TypeMatcher<T>().matches(x) || const TypeMatcher<T2>().matches(x)) return x;
+    throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got ${getTypename(x)})";
+  }
+
+  static dynamic getArg3<T, T2, T3>(List<dynamic> args, int idx, String name) {
+    if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got no value)";
+    var x = args[idx];
+    if (const TypeMatcher<T>().matches(x) || const TypeMatcher<T2>().matches(x) || const TypeMatcher<T3>().matches(x)) return x;
+    throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got ${getTypename(x)})";
   }
   
   static dynamic getMetatable(dynamic x) {

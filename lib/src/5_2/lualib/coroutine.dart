@@ -8,12 +8,12 @@ loadCoroutine(Context ctx) {
   ctx.env["coroutine"] = coroutine;
 
   coroutine["create"] = (List<dynamic> args) {
-    Closure x = Context.getArg(args, 0, "create", [const TypeMatcher<Closure>()]);
+    Closure x = Context.getArg1<Closure>(args, 0, "create");
     return [new Thread(closure: x)];
   };
 
   coroutine["resume"] = (List<dynamic> args) {
-    Thread x = Context.getArg(args, 0, "resume", [const TypeMatcher<Thread>()]);
+    Thread x = Context.getArg1<Thread>(args, 0, "resume");
     
     if (x.status != CoroutineStatus.SUSPENDED) {
       return [false, "cannot resume non-suspended coroutine"];

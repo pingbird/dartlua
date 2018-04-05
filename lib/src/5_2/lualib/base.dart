@@ -53,10 +53,7 @@ loadBase(Context ctx) {
   };
 
   ctx.env["load"] = (List<dynamic> args) {
-    var ld = Context.getArg(args, 0, "load", [
-      const TypeMatcher<LuaDartFunc>(), // 🧐
-      const TypeMatcher<dynamic>(),
-    ]);
+    var ld = Context.getArg2<LuaDartFunc, dynamic>(args, 0, "load");
     
     if (ld is! LuaDartFunc) ld = Context.luaToString(ld);
     
@@ -72,17 +69,17 @@ loadBase(Context ctx) {
   };
 
   ctx.env["next"] = (List<dynamic> args) {
-    Table table = Context.getArg(args, 0, "next", [const TypeMatcher<Table>()]);
+    Table table = Context.getArg1<Table>(args, 0, "next");
     var k = table.next(maybeAt(args, 1));
     return [k, table.rawget(k)];
   };
 
   ctx.env["pairs"] = (List<dynamic> args) {
-    return [ctx.env["next"], Context.getArg(args, 0, "pairs", [const TypeMatcher<Table>()]), null];
+    return [ctx.env["next"], Context.getArg1<Table>(args, 0, "pairs"), null];
   };
 
   ctx.env["pcall"] = (List<dynamic> args) {
-    var f = Context.getArg(args, 0, "pcall", [const TypeMatcher<dynamic>()]);
+    var f = Context.getArg1<dynamic>(args, 0, "pcall");
     try {
       return <dynamic>[true]..addAll(Context.attemptCall(f, args.skip(1).toList(growable: false)));
     } on LuaError catch(e) {
@@ -109,33 +106,30 @@ loadBase(Context ctx) {
   };
 
   ctx.env["rawget"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "rawget", [const TypeMatcher<Table>()]);
-    var k = Context.getArg(args, 1, "rawget", [const TypeMatcher<dynamic>()]);
+    Table t = Context.getArg1<Table>(args, 0, "rawget");
+    var k = Context.getAny(args, 1, "rawget",);
     return [
       t.rawget(k),
     ];
   };
 
   ctx.env["rawlen"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "rawlen", [const TypeMatcher<Table>()]);
+    Table t = Context.getArg1<Table>(args, 0, "rawlen");
     return [
       t.length,
     ];
   };
 
   ctx.env["rawset"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "rawset", [const TypeMatcher<Table>()]);
-    var k = Context.getArg(args, 1, "rawset", [const TypeMatcher<dynamic>()]);
-    var v = Context.getArg(args, 2, "rawset", [const TypeMatcher<dynamic>()]);
+    Table t = Context.getArg1<Table>(args, 0, "rawset");
+    var k = Context.getAny(args, 1, "rawset");
+    var v = Context.getAny(args, 2, "rawset");
     t.rawset(k, v);
     return [];
   };
 
   ctx.env["select"] = (List<dynamic> args) {
-    var a = Context.getArg(args, 0, "select", [
-      const TypeMatcher<num>(),
-      const TypeMatcher<String>(),
-    ]);
+    var a = Context.getArg2<num, String>(args, 0, "select");
     
     if (a is String) {
       if (a == "#") {
@@ -151,14 +145,11 @@ loadBase(Context ctx) {
   };
 
   ctx.env["setmetatable"] = (List<dynamic> args) {
-    Table t = Context.getArg(args, 0, "setmetatable", [const TypeMatcher<Table>()]);
+    Table t = Context.getArg1<Table>(args, 0, "setmetatable");
     
     if (args.length < 2) throw "bad argument #2 to 'setmetatable' (nil or table expected)";
     
-    Table v = Context.getArg(args, 1, "setmetatable", [
-      const TypeMatcher<Table>(),
-      const TypeMatcher<Null>(),
-    ]);
+    Table v = Context.getArg1<Table>(args, 1, "setmetatable");
     
     t.metatable = v;
     
