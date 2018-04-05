@@ -112,8 +112,8 @@ function finish()
     -- print(hash)
 end
 
-if debug then -- Running vanilla lua or LuaJIT
-    local count = 16384
+if not test then -- Running vanilla lua or LuaJIT
+    local count = 8192
 
     for i = 1, count do
         step()
