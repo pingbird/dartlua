@@ -43,7 +43,7 @@ class BoolConst extends Const {
 class NumberConst extends Const {
   const NumberConst(this.value);
   final type = ConstType.CONST_NUMBER;
-  final double value;
+  final num value;
   toString() => value.toString();
 }
 

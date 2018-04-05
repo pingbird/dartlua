@@ -75,7 +75,10 @@ class Decoder {
       switch (read(1)[0]) {
         case 0: return new Const();
         case 1: return new BoolConst(read(1)[0] > 0);
-        case 3: return new NumberConst(code.useInt ? readInt(code.numSize, code.bigEndian) : readDouble());
+        case 3:
+          num x = code.useInt ? readInt(code.numSize, code.bigEndian) : readDouble();
+          if (x == x.floor()) x = x.floor(); // Convert to int when possible
+          return new NumberConst(x);
         case 4: return new StringConst(readString());
         default: throw "Unknown constant id";
       }
