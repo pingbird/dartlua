@@ -11,8 +11,8 @@ loadString(Context ctx) {
   ctx.stringMetatable = string;
 
   string["rep"] = (List<dynamic> args) {
-    String str = Context.luaToString(Context.getArg(args, 0, "rep", [const TypeMatcher<String>(), const TypeMatcher<num>()]));
-    num amount = Context.getArg(args, 1, "rep", [const TypeMatcher<num>()]);
+    String str = Context.luaToString(Context.getNumArg(args, 0, "rep"));
+    num amount = Context.getNumArg(args, 1, "rep");
     return [str * amount.floor()];
   };
 
@@ -20,7 +20,7 @@ loadString(Context ctx) {
     var o = new StringBuffer();
   
     for (int i = 0; i < args.length; i++) {
-      int n = (Context.getArg(args, i, "char", [const TypeMatcher<num>()]) as num).floor();
+      int n = Context.getNumArg(args, i, "char").floor();
       if (n < 0 || n > 255) throw "bad argument #${i + 1} to 'char' (value out of range)";
       o.writeCharCode(n);
     }
@@ -29,9 +29,19 @@ loadString(Context ctx) {
   };
 
   string["sub"] = (List<dynamic> args) {
-    String str = Context.luaToString(Context.getArg(args, 0, "sub", [const TypeMatcher<String>(), const TypeMatcher<num>()]));
-    int start = (Context.getArg(args, 1, "sub", [const TypeMatcher<num>()]) as num).floor();
-    int end = maybeAt(args, 2) == null ? str.length : (Context.getArg(args, 2, "sub", [const TypeMatcher<num>()]) as num).floor();
+    if (args.length < 1) throw "bad argument #1 to 'sub' (string expected, got no value)";
+    var i = args[0];
+    String str;
+    if (i is String) {
+      str = i;
+    } else if (i is num) {
+      str = Context.numToString(i);
+    } else {
+      throw "bad argument #1 to 'sub' (string expected, got ${Context.getTypename(i)})";
+    }
+    
+    int start = Context.getNumArg(args, 1, "sub").floor();
+    int end = maybeAt(args, 2) == null ? str.length : Context.getNumArg(args, 2, "sub").floor();
     
     if (start == 0) start = 1;
     if (start < 0) start = str.length + start + 1;
@@ -42,9 +52,19 @@ loadString(Context ctx) {
   };
 
   string["byte"] = (List<dynamic> args) {
-    String str = Context.luaToString(Context.getArg(args, 0, "sub", [const TypeMatcher<String>(), const TypeMatcher<num>()]));
-    int start = (Context.getArg(args, 1, "sub", [const TypeMatcher<num>()]) as num).floor();
-    int end = maybeAt(args, 2) == null ? start : (Context.getArg(args, 2, "sub", [const TypeMatcher<num>()]) as num).floor();
+    if (args.length < 1) throw "bad argument #1 to 'byte' (string expected, got no value)";
+    var i = args[0];
+    String str;
+    if (i is String) {
+      str = i;
+    } else if (i is num) {
+      str = Context.numToString(i);
+    } else {
+      throw "bad argument #1 to 'byte' (string expected, got ${Context.getTypename(i)})";
+    }
+
+    int start = Context.getNumArg(args, 1, "byte").floor();
+    int end = maybeAt(args, 2) == null ? start : Context.getNumArg(args, 2, "byte");
   
     if (start == 0) start = 1;
     if (start < 0) start = str.length + start + 1;

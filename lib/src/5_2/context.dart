@@ -60,10 +60,24 @@ class Context {
   }
   
   static dynamic getArg(List<dynamic> args, int idx, String name, List<TypeMatcher> matchers) {
-    if (args.length < idx + 1) throw
+    if (args.length <= idx) throw
     "bad argument #${idx + 1} to '$name' (${matchers[0]} expected, got no value)";
     if (matchers.any((m) => m.matches(args[idx]))) return args[idx];
     throw "bad argument #${idx + 1} to '$name' (${matchers[0]} expected, got ${getTypename(args[idx])})";
+  }
+
+  static num getNumArg(List<dynamic> args, int idx, String name) {
+    if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (number expected, got no value)";
+    var x = args[idx];
+    if (x is num) return x;
+    throw "bad argument #${idx + 1} to '$name' (number expected, got ${getTypename(x)})";
+  }
+
+  static T getArg1<T>(List<dynamic> args, int idx, String name) {
+    if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got no value)";
+    var x = args[idx];
+    if (new TypeMatcher<T>().matches(x)) return x;
+    throw "bad argument #${idx + 1} to '$name' (number expected, got ${getTypename(x)})";
   }
   
   static dynamic getMetatable(dynamic x) {
@@ -133,19 +147,24 @@ class Context {
     }
   }
   
+  static String numToString(num x) {
+    if (x is int) return x.toString();
+    if (x == double.INFINITY) return "inf";
+    if (x != x) return "-nan";
+    if (x == double.NEGATIVE_INFINITY) return "-inf";
+    return x.toString().replaceFirst(new RegExp(r"\.0$"), "");
+  }
+  
   static dynamic luaToString(dynamic x) {
     if (x == null) {
       return "nil";
-    } else if (x is double) {
-      if (x == double.INFINITY) return "inf";
-      if (x != x) return "-nan";
-      if (x == double.NEGATIVE_INFINITY) return "-inf";
-      return x.toString().replaceFirst(new RegExp(r"\.0$"), "");
+    } else if (x is num) {
+      return numToString(x);
     } else if (hasMetamethod(x, "__tostring")) {
       return maybeAt(invokeMetamethod(x, "__tostring", [x]), 0);
     } else if (x is String) {
       return x;
-    } else if (x is int || x is bool) {
+    } else if (x is bool) {
       return x.toString();
     } else {
       return "${getTypename(x)}: ${(x.hashCode % 0x100000000).toRadixString(16).padLeft(8, "0")}";
