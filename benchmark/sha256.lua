@@ -109,7 +109,7 @@ function step()
 end
 
 function finish()
-    -- print(hash)
+    print(hash)
 end
 
 if not test then -- Running vanilla lua or LuaJIT
@@ -118,6 +118,8 @@ if not test then -- Running vanilla lua or LuaJIT
     for i = 1, count do
         step()
     end
+
+    hash = "potato"
 
     local socket = require("socket")
     local t0 = socket.gettime()

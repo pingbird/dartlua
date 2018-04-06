@@ -81,22 +81,24 @@ Future<int> test(String path, int count) async {
   return dt;
 }
 
-testAll(String file, int count) async {
+Future<double> testAll(String file, int count) async {
   var lua51 = Process.run("lua5.1", ["benchmark/$file.lua"]);
   var lua52 = Process.run("lua5.2", ["benchmark/$file.lua"]);
   var luajit = Process.run("luajit", ["benchmark/$file.lua"]);
   
   var base = 1 / ((await test("benchmark/$file.lua", count)) / (count * 1000000));
   
-  print("LuaDart: ${base.toStringAsFixed(2)} H/s");
+  print("LuaDart:   ${base.toStringAsFixed(2)} H/s");
   
   diff(String name, ProcessResult res) {
     if (res.stderr != "") throw res.stderr;
     var o = 1 / (int.parse(res.stdout.split("\n").first) / (count * 1000000));
-    print("$name: ${o.toStringAsFixed(0)} H/s (${(o / base).toStringAsFixed(2)}x)");
+    print("${"$name:".padRight(10)} ${o.toStringAsFixed(0)} H/s (${(o / base).toStringAsFixed(2)}x)");
   }
   
   diff("Lua 5.1", await lua51);
   diff("Lua 5.2", await lua52);
   diff("LuaJIT", await luajit);
+  
+  return base;
 }
