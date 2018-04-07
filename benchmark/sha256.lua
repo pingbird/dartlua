@@ -109,7 +109,7 @@ function step()
 end
 
 function finish()
-    print(hash)
+    -- print(hash)
 end
 
 if not test then -- Running vanilla lua or LuaJIT

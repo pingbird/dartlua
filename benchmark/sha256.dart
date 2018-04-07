@@ -12,5 +12,6 @@ Future main() async {
   var o = 1 / (int.parse(shabench.stdout.split("\n").first) / (count * 1000000));
   print("C:         ${o.toStringAsFixed(0)} H/s (${(o / base).toStringAsFixed(2)}x)");
   
+  print("(paused for debugging)");
   debugger();
 }
