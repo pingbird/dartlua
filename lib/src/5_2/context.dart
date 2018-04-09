@@ -18,6 +18,7 @@ class LuaErrorImpl extends LuaError {
 }
 
 typedef List<dynamic> LuaDartFunc(List<dynamic> params);
+typedef List<dynamic> LuaDartDebugFunc(Thread thread, List<dynamic> params);
 typedef num ArithCB(num x, num y);
 typedef num UArithCB(num x);
 
@@ -45,8 +46,8 @@ class Context {
   dynamic userdata;
   
   Table env;
-  
   Table stringMetatable;
+  LuaDartFunc yield;
   
   static String getTypename(dynamic v) {
     if (v is String) return "string";
@@ -90,18 +91,6 @@ class Context {
       return x.metatable.map.containsKey("__metatable") ? x.metatable.map["__metatable"] : x.metatable;
     } // TODO: strings
     return null;
-  }
-  
-  static List<dynamic> attemptCall(dynamic x, [List<dynamic> args = const []]) {
-    if (x is Table) {
-      return invokeMetamethod(x, "__call", args);
-    } else if (x is LuaDartFunc) {
-      return x(args);
-    } else if (x is Closure) {
-      return x(args);
-    } else {
-      throw "attempt to call a ${getTypename(x)} value";
-    }
   }
   
   static dynamic getLength(dynamic x) {

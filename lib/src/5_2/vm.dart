@@ -106,6 +106,20 @@ class Thread {
   dynamic _GR(int x) => registers[x + _base];
   dynamic _SR(int x, dynamic y) => registers[x + _base] = y;
 
+  List<dynamic> attemptCall(dynamic x, [List<dynamic> args = const []]) {
+    if (x is Table) {
+      return Context.invokeMetamethod(x, "__call", args);
+    } else if (x is LuaDartFunc) {
+      return x(args);
+    } else if (x is LuaDartDebugFunc) {
+      return x(this, args);
+    } else if (x is Closure) {
+      return x(args);
+    } else {
+      throw "attempt to call a ${Context.getTypename(x)} value";
+    }
+  }
+
   void loadReturns(List<dynamic> ret) {
     var pc = _frame.pc - 1;
     var A = _code[pc * 4 + 1];
@@ -198,6 +212,7 @@ class Thread {
   int _base;
 
   CoroutineResult resume([List<dynamic> params = const []]) {
+    if (status == CoroutineStatus.DEAD) return null;
     if (!started) {
       _updateFrame();
       for (int i = 0; i < max(params.length, _closure.prototype.params); i++) {
@@ -206,6 +221,8 @@ class Thread {
       }
       
       started = true;
+    } else {
+      loadReturns(params); // resume from yield
     }
 
     try {
@@ -319,7 +336,7 @@ class Thread {
               _SR(i, maybeAt(args, i));
             }
           } else {
-            var ret = Context.attemptCall(x, args);
+            var ret = attemptCall(x, args);
             loadReturns(ret);
           }
         } else if (OP == 30) { // TAILCALL(ABC)
@@ -339,7 +356,7 @@ class Thread {
               _SR(i, maybeAt(args, i));
             }
           } else {
-            var ret = Context.attemptCall(_GR(A), args);
+            var ret = attemptCall(_GR(A), args);
 
             if (_frames.length == 1) {
               status = CoroutineStatus.DEAD;
@@ -386,7 +403,7 @@ class Thread {
           _SR(A, _GR(A) - step);
           _frame.pc += B;
         } else if (OP == 34) { // TFORCALL(ABC)
-          var ret = Context.attemptCall(_GR(A), [_GR(A + 1), _GR(A + 2)]);
+          var ret = attemptCall(_GR(A), [_GR(A + 1), _GR(A + 2)]);
           var i = 0;
           for (int n = A + 3; n < A + C + 3; n++) _SR(n, maybeAt(ret, i++));
           

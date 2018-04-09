@@ -1,6 +1,7 @@
 import 'package:lua/src/5_2/table.dart';
 import 'package:lua/src/5_2/context.dart';
 import 'package:lua/src/5_2/state.dart';
+import 'package:lua/src/5_2/vm.dart';
 import 'package:lua/src/util.dart';
 
 export 'bit.dart';
@@ -78,10 +79,10 @@ loadBase(Context ctx) {
     return [ctx.env["next"], Context.getArg1<Table>(args, 0, "pairs"), null];
   };
 
-  ctx.env["pcall"] = (List<dynamic> args) {
+  ctx.env["pcall"] = (Thread thread, List<dynamic> args) {
     var f = Context.getArg1<dynamic>(args, 0, "pcall");
     try {
-      return <dynamic>[true]..addAll(Context.attemptCall(f, args.skip(1).toList(growable: false)));
+      return <dynamic>[true]..addAll(thread.attemptCall(f, args.skip(1).toList(growable: false)));
     } on LuaError catch(e) {
       if (e.value is String) {
         return [false, e.toStringShort()];

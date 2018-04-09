@@ -2,6 +2,7 @@ import 'package:lua/src/5_2/table.dart';
 import 'package:lua/src/5_2/vm.dart';
 import 'package:lua/src/5_2/state.dart';
 import 'package:lua/src/5_2/context.dart';
+import 'package:lua/src/util.dart';
 
 loadCoroutine(Context ctx) {
   var coroutine = new Table();
@@ -21,9 +22,27 @@ loadCoroutine(Context ctx) {
     
     var res = x.resume(args.skip(1).toList(growable: false));
     
-    if (!res.success) return [];
+    if (!res.success) return [false, maybeAt(res.values, 0)];
     
-    var o = [];
+    var o = <dynamic>[true];
     o.addAll(res.values);
+  };
+  
+  coroutine["yield"] = ctx.yield = (List<dynamic> args) {
+    throw "attempt to yield across Dart call boundry";
+  };
+
+  coroutine["status"] = (List<dynamic> args) {
+    Thread x = Context.getArg1<Thread>(args, 0, "status");
+    switch (x.status) {
+      case CoroutineStatus.SUSPENDED: return ["suspended"];
+      case CoroutineStatus.DEAD: return ["dead"];
+      case CoroutineStatus.NORMAL: return ["normal"];
+      case CoroutineStatus.RUNNING: return ["running"];
+    }
+  };
+
+  coroutine["running"] = (Thread thread, List<dynamic> args) {
+    return thread;
   };
 }
