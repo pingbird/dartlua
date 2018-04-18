@@ -92,8 +92,7 @@ do
             ha[1], ha[2], ha[3], ha[4], ha[5], ha[6], ha[7], ha[8] = limit(ha[1] + a), limit(ha[2] + b), limit(ha[3] + c), limit(ha[4] + d), limit(ha[5] + e), limit(ha[6] + f), limit(ha[7] + g), limit(ha[8] + h)
         end
 
-        return
-        bit.tohex(ha[1]) .. bit.tohex(ha[2]) .. bit.tohex(ha[3]) .. bit.tohex(ha[4]) ..
+        return bit.tohex(ha[1]) .. bit.tohex(ha[2]) .. bit.tohex(ha[3]) .. bit.tohex(ha[4]) ..
                 bit.tohex(ha[5]) .. bit.tohex(ha[6]) .. bit.tohex(ha[7]) .. bit.tohex(ha[8])
     end
 end

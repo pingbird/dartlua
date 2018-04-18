@@ -88,9 +88,11 @@ class Frame {
 class Thread {
   Thread({
     @required Closure closure,
-  }) : registers = new List.filled(closure.prototype.registers, null, growable: true) {
+  }) : registers = new List.filled(closure.prototype.registers, null, growable: true), canYield = closure.parent != null {
     _frames.add(new Frame(closure, base: 0));
   }
+  
+  final bool canYield;
 
   List<dynamic> registers;
   
@@ -120,7 +122,7 @@ class Thread {
     }
   }
 
-  void loadReturns(List<dynamic> ret) {
+  void _loadReturns(List<dynamic> ret) {
     var pc = _frame.pc - 1;
     var A = _code[pc * 4 + 1];
     var B = _code[pc * 4 + 2];
@@ -129,7 +131,7 @@ class Thread {
     if (C == 2) {
       _SR(A, maybeAt(ret, 0));
     } else if (C != 1) {
-      if (C == 0) setTop(A + ret.length - 1);
+      if (C == 0) _setTop(A + ret.length - 1);
       if (B == 1) {
         if (C == 0) {
           for (int i = A; i < A + ret.length; i++) _SR(i, maybeAt(ret, i - A));
@@ -148,10 +150,33 @@ class Thread {
     }
   }
   
-  dynamic getUpval(int idx) => _closure.upvalues[idx].get();
-  dynamic setUpval(int idx, dynamic value) => _closure.upvalues[idx].set(value);
+  bool convertToString(int reg) {
+    var x = _GR(reg);
+    if (x is num) _SR(reg, Context.numToString(x)); else if (x is! String) return false;
+    return true;
+  }
   
-  void closeUpvals(int from) {
+  List<dynamic> _callTM() {
+  
+  }
+  
+  List<dynamic> _concat(int total) {
+    do {
+      var top = _frame._top;
+      var n = 2;
+  
+      var a = _GR(top - 2);
+      if ((a is! String && a is! num) || !convertToString(top - 1)) {
+        var b = _GR(top - 1);
+        
+      }
+    } while (total > 1);
+  }
+  
+  dynamic _getUpval(int idx) => _closure.upvalues[idx].get();
+  dynamic _setUpval(int idx, dynamic value) => _closure.upvalues[idx].set(value);
+  
+  void _closeUpvals(int from) {
     if (_frame.openUVs.isEmpty) return;
     
     var e = _frame.openUVs.first;
@@ -162,7 +187,7 @@ class Thread {
     }
   }
 
-  Upval openUpval(int reg) {
+  Upval _openUpval(int reg) {
     if (_frame.openUVs.isEmpty) {
       var uv = new Upval(reg, _base, registers);
       _frame.openUVs.addFirst(uv);
@@ -185,8 +210,8 @@ class Thread {
     return uv;
   }
   
-  void setTop(int x) {
-    if (x >= registers.length - _base) {
+  void _setTop(int x) {
+    if (x >= registers.length - _base) { // expand registers when full
       registers.length = _base + x + 1;
     }
     
@@ -212,17 +237,30 @@ class Thread {
   int _base;
 
   CoroutineResult resume([List<dynamic> params = const []]) {
-    if (status == CoroutineStatus.DEAD) return null;
+    assert(status != CoroutineStatus.DEAD, "Coroutine dead, check status before calling resume");
     if (!started) {
       _updateFrame();
+      // load main body arguments
       for (int i = 0; i < max(params.length, _closure.prototype.params); i++) {
         _SR(i, maybeAt(params, i));
         _frame.args = params;
       }
       
       started = true;
-    } else {
-      loadReturns(params); // resume from yield
+    } else if (status == CoroutineStatus.SUSPENDED) { // resume from yield
+      status = CoroutineStatus.RUNNING;
+      var pc = _frame.pc - 1;
+      var OP = _code[pc * 4];
+      var A = _code[pc * 4 + 1];
+      var B = _code[pc * 4 + 2];
+      var C = _code[pc * 4 + 3];
+      
+      // ADD SUB MUL DIV MOD POW UNM LEN GETTABUP GETTABLE SELF
+      if ((OP >= 13 && OP <= 19) || OP == 21 || OP == 6 || OP == 7 || OP == 12) {
+        _SR(A, params[0]);
+      } else if (OP == 22) { // CONCAT
+      
+      }
     }
 
     try {
@@ -246,16 +284,16 @@ class Thread {
           var a = A;
           registers.fillRange(a + _base, a + B + 1 + _base);
         } else if (OP == 5) { // GETUPVAL(AB)
-          _SR(A, getUpval(B));
+          _SR(A, _getUpval(B));
         } else if (OP == 6) { // GETTABUP(ABC)
-          var v = _G.tableIndex(getUpval(B), _RK(C));
+          var v = _G.tableIndex(_getUpval(B), _RK(C));
           _SR(A, v);
         } else if (OP == 7) { // GETTABLE(ABC)
           _SR(A, _G.tableIndex(_RK(B), _RK(C)));
         } else if (OP == 8) { // SETTABUP(ABC)
-          Context.tableSet(getUpval(A), _RK(B), _RK(C));
+          Context.tableSet(_getUpval(A), _RK(B), _RK(C));
         } else if (OP == 9) { // SETUPVAL(A)
-          setUpval(B, _GR(A));
+          _setUpval(B, _GR(A));
         } else if (OP == 10) { // SETTABLE(ABC)
           Context.tableSet(_GR(A), _RK(B), _RK(C));
         } else if (OP == 11) { // NEWTABLE(ABC)
@@ -289,7 +327,7 @@ class Thread {
           _SR(A, o);
         } else if (OP == 23) { // JMP(AsBx)
           _frame.pc += B;
-          if (A > 0) closeUpvals(A - 1);
+          if (A > 0) _closeUpvals(A - 1);
         } else if (OP == 24) { // EQ
           if (Context.checkEQ(_RK(B), _RK(C)) == (A != 0)) {
             _frame.pc += _getNextJump() + 1;
@@ -322,7 +360,7 @@ class Thread {
             _frame.pc += _getNextJump() + 1;
           }
         } else if (OP == 29) { // CALL
-          if (B != 0) setTop(A + B);
+          if (B != 0) _setTop(A + B);
           var x = _GR(A);
           var args = new List(B == 0 ? _frame._top - A : B - 1);
           if (B != 1) for (int i = 0; i < args.length; i++) args[i] = _GR(i + A + 1);
@@ -330,27 +368,27 @@ class Thread {
           if (x is Closure) {
             _frames.add(new Frame(x, base: _frame.base + _frame._top));
             _updateFrame();
-            setTop(_prototype.registers);
+            _setTop(_prototype.registers);
             if (_prototype.varag > 0) _frame.args = args;
             for (int i = 0; i < min(args.length, _closure.prototype.params); i++) {
               _SR(i, maybeAt(args, i));
             }
           } else {
             var ret = attemptCall(x, args);
-            loadReturns(ret);
+            _loadReturns(ret);
           }
         } else if (OP == 30) { // TAILCALL(ABC)
           var args = new List(B == 0 ? _frame._top - A : B - 1);
           if (B != 1) for (int i = 0; i < args.length; i++) args[i] = _GR(i + A + 1);
           var x = _GR(A);
-          closeUpvals(0);
+          _closeUpvals(0);
           
           if (x is Closure) {
             _frame.dead = true;
             _frames.removeLast();
             _frames.add(new Frame(x, base: _frame.base + _frame._top));
             _updateFrame();
-            setTop(_prototype.registers);
+            _setTop(_prototype.registers);
             if (_prototype.varag > 0) _frame.args = args;
             for (int i = 0; i < max(args.length, _closure.prototype.params); i++) {
               _SR(i, maybeAt(args, i));
@@ -365,11 +403,11 @@ class Thread {
               _frame.dead = true;
               _frames.removeLast();
               _updateFrame();
-              loadReturns(ret);
+              _loadReturns(ret);
             }
           }
         } else if (OP == 31) { // RETURN(ABC)
-          closeUpvals(0);
+          _closeUpvals(0);
           var ret = new List(B == 0 ? 1 + _frame._top - A : B - 1);
           for (int i = A; i < (B == 0 ? _frame._top : A + B - 1); i++) ret[i - A] = _GR(i);
           
@@ -380,7 +418,7 @@ class Thread {
             _frame.dead = true;
             _frames.removeLast();
             _updateFrame();
-            loadReturns(ret);
+            _loadReturns(ret);
           }
         } else if (OP == 32) { // FORLOOP(AsBx)
           var step = _GR(A + 2);
@@ -433,7 +471,7 @@ class Thread {
             parent: _frame,
             upvalues: new List.generate(proto.upvals.length, (i) {
               var def = proto.upvals[i];
-              return def.stack ? openUpval(def.reg) : _closure.upvalues[def.reg];
+              return def.stack ? _openUpval(def.reg) : _closure.upvalues[def.reg];
             }),
           ));
         } else if (OP == 38) { // VARARG
@@ -441,7 +479,7 @@ class Thread {
             var i = 0;
             for (int n = A; n <= A + B - 2; n++) _SR(n, _frame.args[i++]);
           } else {
-            setTop(A + _frame.args.length - (_prototype.params + 1));
+            _setTop(A + _frame.args.length - (_prototype.params + 1));
             var i = A;
             for (int n = _prototype.params; n < _frame.args.length; n++) _SR(i++, _frame.args[n]);
           }
