@@ -116,7 +116,7 @@ class LuaState {
   
   static dynamic _sanitize(dynamic x) {
     if (x is! LuaDartFunc && x is Function) {
-      throw "Functions must have the signature List<dynamic>(List<dynamic>)";
+      throw "Function does not match LuaDartFunc or LuaDebugFunc";
     } else return x;
   }
   

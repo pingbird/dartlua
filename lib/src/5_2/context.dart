@@ -6,7 +6,7 @@ import 'package:lua/src/util.dart';
 import 'package:meta/meta.dart';
 
 class LuaErrorImpl extends LuaError {
-  LuaErrorImpl(this.value, this.proto, this.inst, {this.dartStackTrace});
+  LuaErrorImpl(dynamic value, this.proto, this.inst, {this.dartStackTrace}) : value = value is LuaErrorImpl ? value.value : value;
   final dynamic value;
   final Prototype proto;
   final int inst;

@@ -10,26 +10,36 @@ import 'package:lua/src/util.dart';
 import 'package:meta/meta.dart';
 import 'package:lua/src/5_2/state.dart';
 
+class ThreadResult {
+  ThreadResult(this.success, this.values, {this.resumeTo});
+  final bool success;
+  final List<dynamic> values;
+  final Frame resumeTo;
+  
+  String toString() {
+    return success ? values.map(Context.luaToString).join(", ") : values[0];
+  }
+}
+
 class Upval extends LinkedListEntry<Upval> {
-  Upval(this.reg, this.base, this.registers) : open = true;
+  Upval(this.reg, this.registers) : open = true;
   Upval.store(this.storage) : open = false;
   
   bool open;
   int reg;
-  int base;
   List<dynamic> registers;
   dynamic storage;
   
   void close() {
     open = false;
-    storage = registers[reg + base];
+    storage = registers[reg];
     registers = null;
     unlink();
   }
   
   void set(dynamic v) {
     if (open) {
-      registers[reg + base] = v;
+      registers[reg] = v;
     } else {
       storage = v;
     }
@@ -39,91 +49,69 @@ class Upval extends LinkedListEntry<Upval> {
 }
 
 class Closure {
-  Closure(this.prototype, {
+  Closure(this.proto, {
     this.parent,
-    Context context,
-    List<Upval> upvalues,
-  }) :
-    context = context ?? parent.closure.context,
-    upvalues = upvalues ?? new List.filled(prototype.upvals.length, null) {}
-  
-  final Frame parent;
-  Context context;
-  final Prototype prototype;
-  Iterable<Frame> frames;
+    this.context,
+    this.upvalues,
+  });
 
+  final Prototype proto;
+  final Frame parent;
+  final Context context;
   final List<Upval> upvalues;
   
   List<dynamic> call(List<dynamic> args) {
-    var thread = new Thread(
-      closure: this,
-    );
-    
-    var res = thread.resume(args);
-    
-    if (!res.success) {
-      throw res.values.isEmpty ? null : maybeAt(res.values, 0);
-    } else if (thread.status == CoroutineStatus.SUSPENDED) {
-      throw "attempt to yield across Dart call boundary";
+    var f = new Thread(closure: this).frame;
+    f.loadArgs(args);
+    var x = f.cont();
+    if (x.resumeTo != null) throw "cannot yield across dart call boundary";
+    if (!x.success) {
+      var v = maybeAt(x.values, 0);
+      if (v is LuaErrorImpl) throw v;
+      throw new LuaErrorImpl(maybeAt(x.values, 0), proto, f._pc);
     }
-    
-    return res.values;
+    return x.values;
   }
 }
 
 class Frame {
-  Frame(this.closure, {@required this.base}) :
-    _top = closure.prototype.registers {}
+  Frame(this._proto, {
+    this.parent,
+    Context context,
+    List<Upval> upvalues,
+    @required Thread thread,
+  }) :
+    context = context ?? parent.context,
+    _upvalues = upvalues ?? new List.filled(_proto.upvals.length, null),
+    _K = _proto.constants,
+    _R = new List.filled(_proto.registers, null, growable: true),
+    _code = _proto.rawCode,
+    _thread = thread {}
     
-  int base;
-  final Closure closure;
-  final openUVs = new LinkedList<Upval>();
+  final Thread _thread;
+  final Frame parent;
+  final Context context;
+  final Prototype _proto;
+  final List<Upval> _upvalues;
+  final List<Const> _K;
+  final List<dynamic> _R;
+  List<dynamic> _varargs;
+  final Int32List _code;
+  final _openUVs = new LinkedList<Upval>();
   
-  bool dead = false;
-  int _top;
-  int pc = 0;
-  List<dynamic> args;
-}
+  int _pc = 0;
+  int _top = 0;
+  
+  int _getExtraArg() => _code[_pc++ * 4 + 1];
+  int _getNextJump() => _code[_pc * 4 + 2];
 
-class Thread {
-  Thread({
-    @required Closure closure,
-  }) : registers = new List.filled(closure.prototype.registers, null, growable: true), canYield = closure.parent != null {
-    _frames.add(new Frame(closure, base: 0));
-  }
-  
-  final bool canYield;
-
-  List<dynamic> registers;
-  
-  CoroutineStatus status = CoroutineStatus.SUSPENDED;
-  bool started = false;
-  
-  List<Frame> _frames = [];
-
-  int _getExtraArg() => _code[_frame.pc++ * 4 + 1];
-  int _getNextJump() => _code[_frame.pc * 4 + 2];
-  
   dynamic _RK(int x) => x >= 256 ? _K[x - 256].value : _GR(x);
-  dynamic _GR(int x) => registers[x + _base];
-  dynamic _SR(int x, dynamic y) => registers[x + _base] = y;
-
-  List<dynamic> attemptCall(dynamic x, [List<dynamic> args = const []]) {
-    if (x is Table) {
-      return Context.invokeMetamethod(x, "__call", args);
-    } else if (x is LuaDartFunc) {
-      return x(args);
-    } else if (x is LuaDartDebugFunc) {
-      return x(this, args);
-    } else if (x is Closure) {
-      return x(args);
-    } else {
-      throw "attempt to call a ${Context.getTypename(x)} value";
-    }
-  }
+  // for debugging:
+  dynamic _GR(int x) => _R[x];
+  dynamic _SR(int x, dynamic y) => _R[x] = y;
 
   void _loadReturns(List<dynamic> ret) {
-    var pc = _frame.pc - 1;
+    var pc = _pc - 1;
     var A = _code[pc * 4 + 1];
     var B = _code[pc * 4 + 2];
     var C = _code[pc * 4 + 3];
@@ -149,37 +137,37 @@ class Thread {
       }
     }
   }
-  
+
   bool convertToString(int reg) {
     var x = _GR(reg);
     if (x is num) _SR(reg, Context.numToString(x)); else if (x is! String) return false;
     return true;
   }
-  
+
   List<dynamic> _callTM() {
   
   }
-  
+
   List<dynamic> _concat(int total) {
     do {
-      var top = _frame._top;
+      var top = _top;
       var n = 2;
-  
+    
       var a = _GR(top - 2);
       if ((a is! String && a is! num) || !convertToString(top - 1)) {
         var b = _GR(top - 1);
-        
+      
       }
     } while (total > 1);
   }
-  
-  dynamic _getUpval(int idx) => _closure.upvalues[idx].get();
-  dynamic _setUpval(int idx, dynamic value) => _closure.upvalues[idx].set(value);
-  
+
+  dynamic _getUpval(int idx) => _upvalues[idx].get();
+  dynamic _setUpval(int idx, dynamic value) => _upvalues[idx].set(value);
+
   void _closeUpvals(int from) {
-    if (_frame.openUVs.isEmpty) return;
-    
-    var e = _frame.openUVs.first;
+    if (_openUVs.isEmpty) return;
+  
+    var e = _openUVs.first;
     while (e != null && e.reg >= from) {
       var next = e.next;
       e.close();
@@ -188,89 +176,54 @@ class Thread {
   }
 
   Upval _openUpval(int reg) {
-    if (_frame.openUVs.isEmpty) {
-      var uv = new Upval(reg, _base, registers);
-      _frame.openUVs.addFirst(uv);
+    if (_openUVs.isEmpty) {
+      var uv = new Upval(reg, _R);
+      _openUVs.addFirst(uv);
       return uv;
     }
-    
-    var e = _frame.openUVs.first;
+  
+    var e = _openUVs.first;
     while (e.reg >= reg) {
       if (e.reg == reg) return e;
       if (e.next == null) {
-        var uv = new Upval(reg, _base, registers);
+        var uv = new Upval(reg, _R);
         e.insertAfter(uv);
         return uv;
       }
       e = e.next;
     }
-    
-    var uv = new Upval(reg, _base, registers);
+  
+    var uv = new Upval(reg, _R);
     e.insertBefore(uv);
     return uv;
   }
-  
+
   void _setTop(int x) {
-    if (x >= registers.length - _base) { // expand registers when full
-      registers.length = _base + x + 1;
+    if (x >= _R.length) { // expand registers when 1full
+      _R.length = x + 1;
+    }
+    _top = x;
+  }
+  
+  void loadArgs(List<dynamic> args) {
+    for (int i = 0; i < min(args.length, _proto.params); i++) {
+      _SR(i, maybeAt(args, i));
     }
     
-    _frame._top = x;
+    if (_proto.varag > 0) _varargs = args;
   }
   
-  void _updateFrame() {
-    _frame = _frames.last;
-    _closure = _frame.closure;
-    _prototype = _closure.prototype;
-    _code = _prototype.rawCode;
-    _K = _prototype.constants;
-    _G = _frames[0].closure.context;
-    _base = _frame.base;
-  }
+  bool get finished => _pc >= _proto.code.length;
   
-  Frame _frame;
-  Closure _closure;
-  Prototype _prototype;
-  Int32List _code;
-  List<Const> _K;
-  Context _G;
-  int _base;
-
-  CoroutineResult resume([List<dynamic> params = const []]) {
-    assert(status != CoroutineStatus.DEAD, "Coroutine dead, check status before calling resume");
-    if (!started) {
-      _updateFrame();
-      // load main body arguments
-      for (int i = 0; i < max(params.length, _closure.prototype.params); i++) {
-        _SR(i, maybeAt(params, i));
-        _frame.args = params;
-      }
-      
-      started = true;
-    } else if (status == CoroutineStatus.SUSPENDED) { // resume from yield
-      status = CoroutineStatus.RUNNING;
-      var pc = _frame.pc - 1;
-      var OP = _code[pc * 4];
-      var A = _code[pc * 4 + 1];
-      var B = _code[pc * 4 + 2];
-      var C = _code[pc * 4 + 3];
-      
-      // ADD SUB MUL DIV MOD POW UNM LEN GETTABUP GETTABLE SELF
-      if ((OP >= 13 && OP <= 19) || OP == 21 || OP == 6 || OP == 7 || OP == 12) {
-        _SR(A, params[0]);
-      } else if (OP == 22) { // CONCAT
-      
-      }
-    }
-
+  ThreadResult cont() {
     try {
       while (true) {
-        var pc = _frame.pc++;
+        var pc = _pc++;
         var OP = _code[pc * 4];
         var A = _code[pc * 4 + 1];
         var B = _code[pc * 4 + 2];
         var C = _code[pc * 4 + 3];
-        
+      
         if (OP == 0) { // MOVE(AB)
           _SR(A, _GR(B));
         } else if (OP == 1) { // LOADK(ABx)
@@ -279,17 +232,17 @@ class Thread {
           _SR(A, _K[_getExtraArg()].value);
         } else if (OP == 3) { // LOADBOOL(ABC)
           _SR(A, B != 0);
-          if (C != 0) _frame.pc++;
+          if (C != 0) _pc++;
         } else if (OP == 4) { // LOADNIL(AB)
           var a = A;
-          registers.fillRange(a + _base, a + B + 1 + _base);
+          _R.fillRange(a, a + B + 1);
         } else if (OP == 5) { // GETUPVAL(AB)
           _SR(A, _getUpval(B));
         } else if (OP == 6) { // GETTABUP(ABC)
-          var v = _G.tableIndex(_getUpval(B), _RK(C));
+          var v = context.tableIndex(_getUpval(B), _RK(C));
           _SR(A, v);
         } else if (OP == 7) { // GETTABLE(ABC)
-          _SR(A, _G.tableIndex(_RK(B), _RK(C)));
+          _SR(A, context.tableIndex(_RK(B), _RK(C)));
         } else if (OP == 8) { // SETTABUP(ABC)
           Context.tableSet(_getUpval(A), _RK(B), _RK(C));
         } else if (OP == 9) { // SETUPVAL(A)
@@ -300,7 +253,7 @@ class Thread {
           _SR(A, new Table());
         } else if (OP == 12) { // SELF(ABC)
           _SR(A + 1, _GR(B));
-          _SR(A, _G.tableIndex(_GR(B), _RK(C)));
+          _SR(A, context.tableIndex(_GR(B), _RK(C)));
         } else if (OP == 13) { // ADD(ABC)
           _SR(A, Context.attemptArithmetic(_RK(B), _RK(C), "__add", Context.add));
         } else if (OP == 14) { // SUB(ABC)
@@ -326,162 +279,137 @@ class Thread {
           }
           _SR(A, o);
         } else if (OP == 23) { // JMP(AsBx)
-          _frame.pc += B;
+          _pc += B;
           if (A > 0) _closeUpvals(A - 1);
         } else if (OP == 24) { // EQ
           if (Context.checkEQ(_RK(B), _RK(C)) == (A != 0)) {
-            _frame.pc += _getNextJump() + 1;
+            _pc += _getNextJump() + 1;
           } else {
-            _frame.pc++;
+            _pc++;
           }
         } else if (OP == 25) { // LT
           if (Context.checkLT(_RK(B), _RK(C)) == (A != 0)) {
-            _frame.pc += _getNextJump() + 1;
+            _pc += _getNextJump() + 1;
           } else {
-            _frame.pc++;
+            _pc++;
           }
         } else if (OP == 26) { // LE
           if (Context.checkLE(_RK(B), _RK(C)) == (A != 0)) {
-            _frame.pc += _getNextJump() + 1;
+            _pc += _getNextJump() + 1;
           } else {
-            _frame.pc++;
+            _pc++;
           }
         } else if (OP == 27) { // TEST
           if (!Context.truthy(_GR(A)) == (C != 0)) {
-            _frame.pc++;
+            _pc++;
           } else {
-            _frame.pc += _getNextJump() + 1;
+            _pc += _getNextJump() + 1;
           }
         } else if (OP == 28) { // TESTSET
           if (!Context.truthy(_GR(B)) == (C != 0)) {
-            _frame.pc++;
+            _pc++;
           } else {
             _SR(A, _GR(B));
-            _frame.pc += _getNextJump() + 1;
+            _pc += _getNextJump() + 1;
           }
         } else if (OP == 29) { // CALL
           if (B != 0) _setTop(A + B);
           var x = _GR(A);
-          var args = new List(B == 0 ? _frame._top - A : B - 1);
+          var args = new List(B == 0 ? _top - A : B - 1);
           if (B != 1) for (int i = 0; i < args.length; i++) args[i] = _GR(i + A + 1);
-          
+        
           if (x is Closure) {
-            _frames.add(new Frame(x, base: _frame.base + _frame._top));
-            _updateFrame();
-            _setTop(_prototype.registers);
-            if (_prototype.varag > 0) _frame.args = args;
-            for (int i = 0; i < min(args.length, _closure.prototype.params); i++) {
-              _SR(i, maybeAt(args, i));
-            }
+            var f = _thread.newFrame(x);
+            f.loadArgs(args);
+            var res = f.cont();
+            if (res.resumeTo != null) return res;
+            _loadReturns(res.values);
           } else {
-            var ret = attemptCall(x, args);
+            var ret = _thread.attemptCall(x, args);
             _loadReturns(ret);
           }
         } else if (OP == 30) { // TAILCALL(ABC)
-          var args = new List(B == 0 ? _frame._top - A : B - 1);
+          var args = new List(B == 0 ? _top - A : B - 1);
           if (B != 1) for (int i = 0; i < args.length; i++) args[i] = _GR(i + A + 1);
           var x = _GR(A);
           _closeUpvals(0);
-          
+        
           if (x is Closure) {
-            _frame.dead = true;
-            _frames.removeLast();
-            _frames.add(new Frame(x, base: _frame.base + _frame._top));
-            _updateFrame();
-            _setTop(_prototype.registers);
-            if (_prototype.varag > 0) _frame.args = args;
-            for (int i = 0; i < max(args.length, _closure.prototype.params); i++) {
-              _SR(i, maybeAt(args, i));
-            }
+            var f = _thread.newFrame(x);
+            f.loadArgs(args);
+            return f.cont();
           } else {
-            var ret = attemptCall(_GR(A), args);
-
-            if (_frames.length == 1) {
-              status = CoroutineStatus.DEAD;
-              return new CoroutineResult(true, ret);
-            } else {
-              _frame.dead = true;
-              _frames.removeLast();
-              _updateFrame();
-              _loadReturns(ret);
-            }
+            var ret = _thread.attemptCall(_GR(A), args);
+            return new ThreadResult(true, ret);
           }
         } else if (OP == 31) { // RETURN(ABC)
           _closeUpvals(0);
-          var ret = new List(B == 0 ? 1 + _frame._top - A : B - 1);
-          for (int i = A; i < (B == 0 ? _frame._top : A + B - 1); i++) ret[i - A] = _GR(i);
-          
-          if (_frames.length == 1) {
-            status = CoroutineStatus.DEAD;
-            return new CoroutineResult(true, ret);
-          } else {
-            _frame.dead = true;
-            _frames.removeLast();
-            _updateFrame();
-            _loadReturns(ret);
-          }
+          var ret = new List(B == 0 ? 1 + _top - A : B - 1);
+          for (int i = A; i < (B == 0 ? _top : A + B - 1); i++) ret[i - A] = _GR(i);
+          return new ThreadResult(true, ret);
         } else if (OP == 32) { // FORLOOP(AsBx)
           var step = _GR(A + 2);
           var idx = _SR(A, _GR(A) + step);
           var limit = _GR(A + 1);
-          
+        
           if ((step > 0 && idx <= limit) || (step < 0 && limit <= idx)) {
-            _frame.pc += B;
+            _pc += B;
             _SR(A + 3, _GR(A));
           }
         } else if (OP == 33) { // FORPREP(AsBx)
           var init = _GR(A);
           var limit = _GR(A + 1);
           var step = _GR(A + 2);
-          
+        
           if (init is! num) throw "'for' initial value must be a number";
           if (limit is! num) throw "'for' limit value must be a number";
           if (step is! num) throw "'for' step value must be a number";
-          
+        
           _SR(A, _GR(A) - step);
-          _frame.pc += B;
+          _pc += B;
         } else if (OP == 34) { // TFORCALL(ABC)
-          var ret = attemptCall(_GR(A), [_GR(A + 1), _GR(A + 2)]);
+          var ret = _thread.attemptCall(_GR(A), [_GR(A + 1), _GR(A + 2)]);
           var i = 0;
           for (int n = A + 3; n < A + C + 3; n++) _SR(n, maybeAt(ret, i++));
-          
-          var b = _code[_frame.pc * 4 + 2];
+        
+          var b = _code[_pc * 4 + 2];
           var a = _getExtraArg();
-          
+        
           if (_GR(a + 1) != null) {
             _SR(a, _GR(a + 1));
-            _frame.pc += b;
+            _pc += b;
           }
         } else if (OP == 35) { // TFORLOOP(AsBx)
           if (_GR(A + 1) != null) {
             _SR(A, _GR(A + 1));
-            _frame.pc += B;
+            _pc += B;
           }
         } else if (OP == 36) { // SETLIST(ABC)
           if (B > 0) {
             for (int i = 1; i <= B; i++) Context.tableSet(_GR(A), ((C - 1) * 50) + i, _GR(A + i));
           } else {
-            for (int i = 1; i <= _frame._top - A; i++) Context.tableSet(_GR(A), ((C - 1) * 50) + i, _GR(A + i));
+            for (int i = 1; i <= _top - A; i++) Context.tableSet(_GR(A), ((C - 1) * 50) + i, _GR(A + i));
           }
         } else if (OP == 37) { // CLOSURE(ABC)
-          var proto = _prototype.prototypes[B];
-          
+          var proto = _proto.prototypes[B];
+        
           _SR(A, new Closure(
             proto,
-            parent: _frame,
+            context: context,
+            parent: this,
             upvalues: new List.generate(proto.upvals.length, (i) {
               var def = proto.upvals[i];
-              return def.stack ? _openUpval(def.reg) : _closure.upvalues[def.reg];
+              return def.stack ? _openUpval(def.reg) : _upvalues[def.reg];
             }),
           ));
         } else if (OP == 38) { // VARARG
           if (B > 0) {
             var i = 0;
-            for (int n = A; n <= A + B - 2; n++) _SR(n, _frame.args[i++]);
+            for (int n = A; n <= A + B - 2; n++) _SR(n, _varargs[i++]);
           } else {
-            _setTop(A + _frame.args.length - (_prototype.params + 1));
+            _setTop(A + _varargs.length - (_proto.params + 1));
             var i = A;
-            for (int n = _prototype.params; n < _frame.args.length; n++) _SR(i++, _frame.args[n]);
+            for (int n = _proto.params; n < _varargs.length; n++) _SR(i++, _varargs[n]);
           }
         } else {
           throw "invalid instruction";
@@ -489,8 +417,81 @@ class Thread {
       }
     } catch(e, bt) {
       if (e is LuaError) rethrow;
-      throw new LuaErrorImpl(e, _prototype, _frame.pc - 1, dartStackTrace: bt);
+      throw new LuaErrorImpl(e, _proto, _pc - 1, dartStackTrace: bt);
     }
+  }
+}
+
+class Thread {
+  Thread({@required Closure closure}) {
+    frame = newFrame(closure);
+  }
+  
+  Frame newFrame(Closure closure) => new Frame(closure.proto, context: closure.context, upvalues: closure.upvalues, thread: this);
+  
+  Frame frame;
+  Frame _resumeTo;
+  
+  CoroutineStatus status = CoroutineStatus.SUSPENDED;
+  bool started = false;
+
+  List<dynamic> attemptCall(dynamic x, [List<dynamic> args = const []]) {
+    if (x is Table) {
+      return Context.invokeMetamethod(x, "__call", args);
+    } else if (x is LuaDartFunc) {
+      return x(args);
+    } else if (x is LuaDartDebugFunc) {
+      return x(this, args);
+    } else if (x is Closure) {
+      return x(args);
+    } else {
+      throw "attempt to call a ${Context.getTypename(x)} value";
+    }
+  }
+
+  CoroutineResult resume([List<dynamic> params = const []]) {
+    assert(status != CoroutineStatus.DEAD, "Coroutine dead, check status before calling resume");
+    
+    if (!started) {
+      started = true;
+      _resumeTo = frame;
+    }
+
+    status = CoroutineStatus.RUNNING;
+    
+    try {
+      _resumeTo.loadArgs(params);
+      var res = _resumeTo.cont();
+      _resumeTo = res.resumeTo;
+      status = _resumeTo != null ? CoroutineStatus.DEAD : CoroutineStatus.SUSPENDED;
+      return new CoroutineResult(true, res.values);
+    } catch(e) {
+      status = CoroutineStatus.DEAD;
+      return new CoroutineResult(false, [e]);
+    }
+    
+    /*if (!started) {
+      _updateFrame();
+      // load main body arguments
+      
+      started = true;
+    } else if (status == CoroutineStatus.SUSPENDED) { // resume from yield
+      status = CoroutineStatus.RUNNING;
+      var pc = _pc - 1;
+      var OP = _code[pc * 4];
+      var A = _code[pc * 4 + 1];
+      var B = _code[pc * 4 + 2];
+      var C = _code[pc * 4 + 3];
+      
+      // ADD SUB MUL DIV MOD POW UNM LEN GETTABUP GETTABLE SELF
+      if ((OP >= 13 && OP <= 19) || OP == 21 || OP == 6 || OP == 7 || OP == 12) {
+        _SR(A, params[0]);
+      } else if (OP == 22) { // CONCAT
+      
+      }
+    }*/
+
+    
   }
 
   toString() => "thread: 0x${(hashCode % 0x100000000).toRadixString(16).padLeft(8, "0")}";

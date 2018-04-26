@@ -10,30 +10,7 @@ import 'package:lua/src/func.dart';
 
 Map<String, CodeDump> cache = {};
 
-// Returns microseconds elapsed
-Future<int> test(String path, int count) async {
-  CodeDump code;
-  
-  if (cache.containsKey(path)) {
-    code = cache[path];
-  } else {
-    var res = await Process.run("luac", [path]);
-  
-    if (res.stderr != "") throw res.stderr;
-  
-    var f = new File("luac.out");
-  
-    if (!await f.exists()) throw "luac.out not found";
-    var fh = await f.open(mode: FileMode.READ);
-    var buffer = new Uint8List(await f.length());
-    await fh.readInto(buffer);
-  
-    await f.delete();
-  
-    var decoder = new Decoder(buffer.buffer);
-    code = decoder.readCodeDump(path);
-  }
-
+int _stepTest(CodeDump code, int count) {
   var env = new Table();
   env["test"] = true;
   var context = new Context(env: env);
@@ -43,19 +20,19 @@ Future<int> test(String path, int count) async {
   loadString(context);
   loadBit(context);
   loadTable(context);
-
+  
   var cl = new Closure(
     code.main,
     context: context,
     upvalues: [new Upval.store(context.env)],
   );
-
+  
   var res = new Thread(closure: cl).resume();
   if (!res.success) throw res.values[0];
   
   var step = env["step"] as Closure;
   if (step == null) throw "Benchmark diddn't create step function";
-
+  
   for (int i = 0; i < count; i++) { // Warm up
     new Thread(closure: step).resume();
   }
@@ -79,6 +56,37 @@ Future<int> test(String path, int count) async {
   }
   
   return dt;
+}
+
+// Returns microseconds elapsed
+Future<int> test(String path, int count) async {
+  CodeDump code;
+  
+  if (cache.containsKey(path)) {
+    code = cache[path];
+  } else {
+    var res = await Process.run("luac", [path]);
+  
+    if (res.stderr != "") throw res.stderr;
+  
+    var f = new File("luac.out");
+  
+    if (!await f.exists()) throw "luac.out not found";
+    var fh = await f.open(mode: FileMode.READ);
+    var buffer = new Uint8List(await f.length());
+    await fh.readInto(buffer);
+  
+    await f.delete();
+  
+    var decoder = new Decoder(buffer.buffer);
+    code = decoder.readCodeDump(path);
+  }
+  
+  for (int i = 0; i < 10; i++) {
+    _stepTest(code, count ~/ 50);
+  }
+  
+  return _stepTest(code, count);
 }
 
 Future<double> testAll(String file, int count) async {
