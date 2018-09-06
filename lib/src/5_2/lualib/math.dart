@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:lua/src/5_2/table.dart';
 import 'package:lua/src/5_2/context.dart';
 
-const rpd = PI / 180;
+const rpd = pi / 180;
 
 loadMath(Context ctx) {
   var math = new Table();
@@ -47,7 +47,7 @@ loadMath(Context ctx) {
   math["cosh"] = (List<dynamic> args) {
     num x = Context.getArg1<num>(args, 0, "cosh");
     return [
-      (pow(E, x) + pow(E, -x)) / 2,
+      (pow(e, x) + pow(e, -x)) / 2,
     ];
   };
 
@@ -58,7 +58,7 @@ loadMath(Context ctx) {
 
   math["exp"] = (List<dynamic> args) {
     num x = Context.getArg1<num>(args, 0, "exp");
-    return [pow(E, x)];
+    return [pow(e, x)];
   };
 
   math["floor"] = (List<dynamic> args) {
@@ -90,7 +90,7 @@ loadMath(Context ctx) {
     return [x, e];
   };
   
-  math["huge"] = double.INFINITY;
+  math["huge"] = double.infinity;
   
   math["ldexp"] = (List<dynamic> args) {
     num x = Context.getArg1<num>(args, 0, "ldexp");
@@ -127,7 +127,7 @@ loadMath(Context ctx) {
     return [o, x - o];
   };
   
-  math["pi"] = PI;
+  math["pi"] = pi;
 
   math["pow"] = (List<dynamic> args) {
     num x = Context.getArg1<num>(args, 0, "pow");
@@ -171,7 +171,7 @@ loadMath(Context ctx) {
 
   math["sinh"] = (List<dynamic> args) {
     num x = Context.getArg1<num>(args, 0, "sinh");
-    return [(pow(E, x) - pow(E, -x)) / 2];
+    return [(pow(e, x) - pow(e, -x)) / 2];
   };
 
   math["sqrt"] = (List<dynamic> args) {
@@ -186,6 +186,6 @@ loadMath(Context ctx) {
 
   math["tanh"] = (List<dynamic> args) {
     num x = Context.getArg1<num>(args, 0, "tanh");
-    return [(pow(E, x) - pow(E, -x)) / (pow(E, x) + pow(E, -x))];
+    return [(pow(e, x) - pow(e, -x)) / (pow(e, x) + pow(e, -x))];
   };
 }

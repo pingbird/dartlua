@@ -75,14 +75,14 @@ class Context {
   static dynamic getArg2<T, T2>(List<dynamic> args, int idx, String name) {
     if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got no value)";
     var x = args[idx];
-    if (const TypeMatcher<T>().matches(x) || const TypeMatcher<T2>().matches(x)) return x;
+    if (new TypeMatcher<T>().matches(x) || new TypeMatcher<T2>().matches(x)) return x;
     throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got ${getTypename(x)})";
   }
 
   static dynamic getArg3<T, T2, T3>(List<dynamic> args, int idx, String name) {
     if (args.length <= idx) throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got no value)";
     var x = args[idx];
-    if (const TypeMatcher<T>().matches(x) || const TypeMatcher<T2>().matches(x) || const TypeMatcher<T3>().matches(x)) return x;
+    if (new TypeMatcher<T>().matches(x) || new TypeMatcher<T2>().matches(x) || new TypeMatcher<T3>().matches(x)) return x;
     throw "bad argument #${idx + 1} to '$name' (${new TypeMatcher<T>()} expected, got ${getTypename(x)})";
   }
   
@@ -140,9 +140,9 @@ class Context {
   
   static String numToString(num x) {
     if (x is int) return x.toString();
-    if (x == double.INFINITY) return "inf";
+    if (x == double.infinity) return "inf";
     if (x != x) return "-nan";
-    if (x == double.NEGATIVE_INFINITY) return "-inf";
+    if (x == double.negativeInfinity) return "-inf";
     return x.toString().replaceFirst(new RegExp(r"\.0$"), "");
   }
   

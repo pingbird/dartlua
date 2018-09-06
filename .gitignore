@@ -1,3 +1,6 @@
+luadist/build/
+luadist/bin/
+
 # Files and directories created by pub
 .packages
 .pub/

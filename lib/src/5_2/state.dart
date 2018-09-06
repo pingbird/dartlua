@@ -89,7 +89,7 @@ class LuaState {
   void loadTable() => lualib.loadTable(_context);
   
   Future<LuaFunction> loadFile(String path) async {
-    var res = await Process.run("luac", [path]);
+    var res = await Process.run("luadist/bin/luac5.2", [path]);
     
     if (res.stderr != "") throw res.stderr;
     

@@ -65,8 +65,8 @@ Future<int> test(String path, int count) async {
   if (cache.containsKey(path)) {
     code = cache[path];
   } else {
-    var res = await Process.run("luac", [path]);
-  
+    var res = await Process.run("wsl", ["luac5.2", path]);
+
     if (res.stderr != "") throw res.stderr;
   
     var f = new File("luac.out");
@@ -75,9 +75,8 @@ Future<int> test(String path, int count) async {
     var fh = await f.open(mode: FileMode.READ);
     var buffer = new Uint8List(await f.length());
     await fh.readInto(buffer);
-  
-    await f.delete();
-  
+    fh.close();
+
     var decoder = new Decoder(buffer.buffer);
     code = decoder.readCodeDump(path);
   }
@@ -90,23 +89,24 @@ Future<int> test(String path, int count) async {
 }
 
 Future<double> testAll(String file, int count) async {
-  var lua51 = Process.run("lua5.1", ["benchmark/$file.lua"]);
-  var lua52 = Process.run("lua5.2", ["benchmark/$file.lua"]);
-  var luajit = Process.run("luajit", ["benchmark/$file.lua"]);
+  var lua51 = Process.run("wsl", ["luadist/bin/lua5.1", "benchmark/$file.lua"]);
+  var lua52 = Process.run("wsl", ["luadist/bin/lua5.2", "benchmark/$file.lua"]);
+  var luajit = Process.run("wsl", ["luadist/bin/luajit", "benchmark/$file.lua"]);
   
   var base = 1 / ((await test("benchmark/$file.lua", count)) / (count * 1000000));
   
   print("LuaDart:   ${base.toStringAsFixed(2)} H/s");
-  
+
   diff(String name, ProcessResult res) {
     if (res.stderr != "") throw res.stderr;
     var o = 1 / (int.parse(res.stdout.split("\n").first) / (count * 1000000));
     print("${"$name:".padRight(10)} ${o.toStringAsFixed(0)} H/s (${(o / base).toStringAsFixed(2)}x)");
   }
-  
-  diff("Lua 5.1", await lua51);
+
   diff("Lua 5.2", await lua52);
   diff("LuaJIT", await luajit);
-  
-  return base;
+  diff("Lua 5.1", await lua51);
+
+  //return base;
+  return 1.0;
 }

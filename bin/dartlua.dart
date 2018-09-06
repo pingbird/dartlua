@@ -42,12 +42,12 @@ main(List<String> rawArgs) async {
     }
 
     var path = args.rest[1];
-    var res = await Process.run("luac", [path]);
+    var res = await Process.run("luadist/bin/luac5.2", [path]);
 
     if (res.stderr != "") throw res.stderr;
 
     var f = new File("luac.out");
-
+    
     if (!await f.exists()) throw "luac.out not found";
     var fh = await f.open(mode: FileMode.READ);
     var buffer = new Uint8List(await f.length());
